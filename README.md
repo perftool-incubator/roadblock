@@ -1,2 +1,5 @@
 # roadblock
-A tool for providing synchronization services across two or more lines of execution
+A synchronization services tool
+
+## Introduction
+Roadblock provides synchronization services for multiple lines of execution, most likely in a distributed system (systems, virtual machines, containers, etc.).  A centralized Redis server is used to provide communication services between a single 'leader' and one or more 'followers'.  The 'leader' is responsible for ensuring that all members of the roadblock have reached a common state (ie. 'ready') before releasing them with a 'go' command.  Each member confirms it's receipt of the 'go' command by responding with a 'gone' command before proceeding.
