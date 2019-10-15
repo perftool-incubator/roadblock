@@ -128,6 +128,7 @@ def main():
                                   password = t_global.args.roadblock_redis_password)
     t_global.pubsubcon = t_global.redcon.pubsub(ignore_subscribe_messages = True)
 
+    print("Roadblock UUID: %s" % (t_global.args.roadblock_uuid))
     print("Role: %s" % (t_global.args.roadblock_role))
     if t_global.args.roadblock_role == 'follower':
         print("Follower ID: %s" % (t_global.args.roadblock_follower_id))
