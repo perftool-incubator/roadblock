@@ -6,30 +6,35 @@ ROADBLOCK_TIMEOUT=120
 DOCKER_FILE=client.test.dockerfile
 CONTAINER_NAME=roadblock-client-test
 POD_NAME=roadblock-test
+BUILD=1
 
 # goto the root of the repo
 REPO_DIR=$(dirname $0)/../
 if pushd ${REPO_DIR} > /dev/null; then
 
-    echo -e "\nBuilding the container infrastructure"
+    if [ "${BUILD}" == 1 ]; then
+	echo -e "\nBuilding the container infrastructure"
     
-    # build the roadblock container
-    if pushd utilities/containers > /dev/null; then
-	if ! buildah bud -t ${CONTAINER_NAME} -f ${DOCKER_FILE} .; then
-	    echo "ERROR: Could not build roadblock client container"
-	    exit 2
+	# build the roadblock container
+	if pushd utilities/containers > /dev/null; then
+	    if ! buildah bud -t ${CONTAINER_NAME} -f ${DOCKER_FILE} .; then
+		echo "ERROR: Could not build roadblock client container"
+		exit 2
+	    fi
+    
+	    popd > /dev/null
+	else
+	    echo "ERROR: Could not pushd to utilities/containers"
+	    exit 1
 	fi
-    
-	popd > /dev/null
-    else
-	echo "ERROR: Could not pushd to utilities/containers"
-	exit 1
-    fi
 
-    # get the redis database container from the registry
-    if ! podman pull docker.io/centos/redis-5-centos7; then
-	echo "ERROR: Could not pull the redis database container"
-	exit 3
+	# get the redis database container from the registry
+	if ! podman pull docker.io/centos/redis-5-centos7; then
+	    echo "ERROR: Could not pull the redis database container"
+	    exit 3
+	fi
+    else
+	echo -e "\nSkipping container infrastructure build"
     fi
 
     echo -e "\nStarting the roadblock test"
