@@ -16,16 +16,9 @@ if pushd ${REPO_DIR} > /dev/null; then
 	echo -e "\nBuilding the container infrastructure"
     
 	# build the roadblock container
-	if pushd utilities/containers > /dev/null; then
-	    if ! buildah bud -t ${CONTAINER_NAME} -f ${DOCKER_FILE} .; then
-		echo "ERROR: Could not build roadblock client container"
-		exit 2
-	    fi
-    
-	    popd > /dev/null
-	else
-	    echo "ERROR: Could not pushd to utilities/containers"
-	    exit 1
+	if ! buildah bud -t ${CONTAINER_NAME} -f utilities/containers/${DOCKER_FILE} ${REPO_DIR}; then
+	    echo "ERROR: Could not build roadblock client container"
+	    exit 2
 	fi
 
 	# get the redis database container from the registry
