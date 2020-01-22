@@ -18,7 +18,7 @@ if pushd ${REPO_DIR} > /dev/null; then
     if [ "${BUILD}" == 1 ]; then
 	echo -e "\nBuilding the container infrastructure"
 
-	if ! podman images localhost/${STAGE_1_IMAGE_NAME} > /dev/null 2>&1; then
+	if [ -z "$(podman images --quiet localhost/${STAGE_1_IMAGE_NAME})" ] ; then
 	    echo -e "\nBuilding the stage 1 container image"
 	    if ! buildah bud -t ${STAGE_1_IMAGE_NAME} -f utilities/containers/${STAGE_1_DOCKER_FILE} ${REPO_DIR}; then
 		echo "ERROR: Could not build stage 1 container image"
@@ -32,7 +32,7 @@ if pushd ${REPO_DIR} > /dev/null; then
 	    fi
 	fi
 
-	if podman images localhost/${STAGE_2_IMAGE_NAME} > /dev/null 2>&1; then
+	if [ -n "$(podman images --quiet localhost/${STAGE_2_IMAGE_NAME})" ]; then
 	    echo -e "\nRemoving stale stage 2 container image"
 	    if ! buildah rmi localhost/${STAGE_2_IMAGE_NAME}; then
 		echo "ERROR: Could not remove stale stage 2 container image"
