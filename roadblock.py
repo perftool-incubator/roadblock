@@ -60,6 +60,12 @@ def process_options ():
                         action = 'append',
                         type = str)
 
+    parser.add_argument('--abort',
+                        dest = 'abort',
+                        help = 'Use this option as a follower to send an abort message as part of this synchronization',
+                        action = 'append',
+                        type = bool)
+
     t_global.args = parser.parse_args();
 
 
@@ -105,6 +111,7 @@ def sighandler(signum, frame):
 def main():
     process_options()
 
+    leader_abort = False
     followers = { 'ready': {},
                   'gone': {} }
 
@@ -215,8 +222,12 @@ def main():
                         # listen for messages published from the leader
                         t_global.pubsubcon.subscribe(t_global.args.roadblock_uuid + '__leader')
 
-                        print("Publishing ready message")
-                        t_global.redcon.publish(t_global.args.roadblock_uuid + '__followers', t_global.args.roadblock_follower_id + '/ready')
+                        if t_global.args.abort:
+                            print("Publishing abort message")
+                            t_global.redcon.publish(t_global.args.roadblock_uuid + '__followers', t_global.args.roadblock_follower_id + '/abort')
+                        else:
+                            print("Publishing ready message")
+                            t_global.redcon.publish(t_global.args.roadblock_uuid + '__followers', t_global.args.roadblock_follower_id + '/ready')
 
                         get_out = True
 
@@ -239,10 +250,24 @@ def main():
                 else:
                     print("Received ready message from unknown follower '%s'" % (msg[0]))
 
+            elif msg[1] == 'abort':
+                leader_abort = True
+                if msg[0] in followers['ready']:
+                    print("Received abort message from '%s'" % (msg[0]))
+                    del followers['ready'][msg[0]]
+                elif msg[0] in t_global.args.roadblock_followers:
+                    print("Did I already process this abort message from follower '%s'?" % (msg[0]))
+                else:
+                    print("Received abort message from unknown follower '%s'" % (msg[0]))
+
             if len(followers['ready']) == 0:
                 print("All followers ready")
-                print("Publishing go message")
-                t_global.redcon.publish(t_global.args.roadblock_uuid + '__leader', "go")
+                if leader_abort:
+                    print("Publishing go-abort message")
+                    t_global.redcon.publish(t_global.args.roadblock_uuid + '__leader', "go-abort")
+                else:
+                    print("Publishing go message")
+                    t_global.redcon.publish(t_global.args.roadblock_uuid + '__leader', "go")
                 break
     elif t_global.args.roadblock_role == 'follower':
         for msg in t_global.pubsubcon.listen():
@@ -257,6 +282,16 @@ def main():
                 cleanup()
                 print("Exiting")
                 return(0)
+            elif msg['data'].decode() == 'go-abort':
+                print("Received abort message from leader")
+                # stop listening for messages published from the leader
+                t_global.pubsubcon.unsubscribe(t_global.args.roadblock_uuid + '__leader')
+                print("Publishing gone message")
+                t_global.redcon.publish(t_global.args.roadblock_uuid + '__followers', t_global.args.roadblock_follower_id + '/gone')
+                print("Cleaning up")
+                cleanup()
+                print("Exiting")
+                return(-3)
 
     if t_global.args.roadblock_role == 'leader':
         for msg in t_global.pubsubcon.listen():
@@ -278,8 +313,12 @@ def main():
                 t_global.pubsubcon.unsubscribe(t_global.args.roadblock_uuid + '__followers')
                 print("Cleaning up")
                 cleanup()
-                print("Exiting")
-                return(0)
+                if leader_abort:
+                    print("Exiting with abort")
+                    return(-3)
+                else:
+                    print("Exiting")
+                    return(0)
 
 if __name__ == "__main__":
     exit(main())
