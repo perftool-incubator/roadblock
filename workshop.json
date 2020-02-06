@@ -1,0 +1,26 @@
+{
+    "targets": {
+	"default": {
+	    "packages": {
+		"python36",
+		"python_redis"
+	    }
+	}
+    },
+    "packages": {
+	"python36": {
+	    "type": "distro",
+	    "distro_info": {
+		"pkg_name": "python36"
+	    }
+	},
+	"python_redis": {
+	    "type": "manual",
+	    "manual_info": {
+		"commands": [
+		    "pip3 install redis"
+		]
+	    }
+	}
+    }
+}
