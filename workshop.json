@@ -1,10 +1,10 @@
 {
     "targets": {
 	"default": {
-	    "packages": {
+	    "packages": [
 		"python36",
 		"python_redis"
-	    }
+	    ]
 	}
     },
     "packages": {
