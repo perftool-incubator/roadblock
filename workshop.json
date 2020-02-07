@@ -9,8 +9,7 @@
 	"fedora31": {
 	    "packages": [
 		"python36",
-		"python3_pip",
-		"python_redis"
+		"python3_redis"
 	    ]
 	}
     },
@@ -21,10 +20,10 @@
 		"pkg_name": "python36"
 	    }
 	},
-	"python3_pip": {
+	"python3_redis": {
 	    "type": "distro",
 	    "distro_info": {
-		"pkg_name": "python3-pip"
+		"pkg_name": "python3-redis"
 	    }
 	},
 	"python_redis": {
