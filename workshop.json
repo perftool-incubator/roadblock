@@ -1,0 +1,37 @@
+{
+    "targets": {
+	"default": {
+	    "packages": [
+		"python36",
+		"python-redis"
+	    ]
+	},
+	"fedora31": {
+	    "packages": [
+		"python3-redis"
+	    ]
+	}
+    },
+    "packages": {
+	"python36": {
+	    "type": "distro",
+	    "distro_info": {
+		"pkg_name": "python36"
+	    }
+	},
+	"python3-redis": {
+	    "type": "distro",
+	    "distro_info": {
+		"pkg_name": "python3-redis"
+	    }
+	},
+	"python_redis": {
+	    "type": "manual",
+	    "manual_info": {
+		"commands": [
+		    "pip3 install redis"
+		]
+	    }
+	}
+    }
+}
