@@ -1,4 +1,6 @@
 #!/usr/bin/python3
+# -*- mode: python; indent-tabs-mode: nil; perl-indent-level: 4 -*-
+# vim: autoindent tabstop=4 shiftwidth=4 expandtab softtabstop=4 filetype=python
 
 import argparse
 import string
