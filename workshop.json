@@ -1,37 +1,52 @@
 {
-    "targets": {
-	"default": {
-	    "packages": [
+    "workshop": {
+        "schema": {
+            "version": "2020.03.02"
+        }
+    },
+    "userenvs": [
+	{
+	    "name": "default",
+	    "requirements": [
 		"python36",
 		"python-redis"
 	    ]
 	},
-	"fedora31": {
-	    "packages": [
+	{
+	    "name": "fedora31",
+	    "requirements": [
+		"python36",
 		"python3-redis"
 	    ]
 	}
-    },
-    "packages": {
-	"python36": {
+    ],
+    "requirements": [
+	{
+	    "name": "python36",
 	    "type": "distro",
 	    "distro_info": {
-		"pkg_name": "python36"
+		"packages": [
+		    "python36"
+		]
 	    }
 	},
-	"python3-redis": {
-	    "type": "distro",
-	    "distro_info": {
-		"pkg_name": "python3-redis"
-	    }
-	},
-	"python_redis": {
+	{
+	    "name": "python-redis",
 	    "type": "manual",
 	    "manual_info": {
 		"commands": [
 		    "pip3 install redis"
 		]
 	    }
+	},
+	{
+	    "name": "python3-redis",
+	    "type": "distro",
+	    "distro_info": {
+		"packages": [
+		    "python3-redis"
+		]
+	    }
 	}
-    }
+    ]
 }
