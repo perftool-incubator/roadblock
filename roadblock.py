@@ -33,6 +33,7 @@ def message_build (recipient_type, recipient_id, command, value=None):
         "payload": {
             "uuid": t_global.args.roadblock_uuid,
             "sender": {
+                "timestamp": calendar.timegm(time.gmtime()),
                 "type": t_global.args.roadblock_role,
                 "id": t_global.my_id
             },
@@ -102,6 +103,9 @@ def define_msg_schema ():
                     "sender": {
                         "type": "object",
                         "properties": {
+                            "timestamp": {
+                                "type": "integer"
+                            },
                             "type": {
                                 "type": "string",
                                 "enum": [
@@ -115,6 +119,7 @@ def define_msg_schema ():
                             }
                         },
                         "required": [
+                            "timestamp",
                             "type",
                             "id"
                         ],
