@@ -84,6 +84,7 @@ if pushd ${REPO_DIR} > /dev/null; then
     ROADBLOCK_UUID=$(uuidgen)
     FOLLOWERS=""
     FOLLOWER_PREFIX="roadblock_follower"
+    LEADER_ID="roadblock_leader"
 
     for i in $(seq 1 ${NUM_FOLLOWERS}); do
 	FOLLOWERS+="--followers=${FOLLOWER_PREFIX}_${i} "
@@ -93,7 +94,7 @@ if pushd ${REPO_DIR} > /dev/null; then
     echo -e "\nStarting the roadblock leader container"
     if ! podman run --detach=true --interactive=true --tty=true --name=roadblock_leader --pod=${POD_NAME} localhost/${STAGE_2_IMAGE_NAME} -c \
 	 "/opt/roadblock/roadblock.py --uuid=${ROADBLOCK_UUID} --role=leader --redis-server=${REDIS_IP_ADDRESS} --redis-password=${REDIS_PASSWORD} ${FOLLOWERS} \
-	 --timeout=${ROADBLOCK_TIMEOUT}"; then
+	 --timeout=${ROADBLOCK_TIMEOUT} --leader-id=${LEADER_ID}"; then
 	echo "ERROR: Could not start the roadblock leader container"
 	exit 5
     fi
@@ -104,7 +105,7 @@ if pushd ${REPO_DIR} > /dev/null; then
 	echo -e "\nStarting the roadblock follower ${i} container with a sleep ${SLEEP_TIME}"
 	if ! podman run --detach --interactive=true --tty=true --name=${FOLLOWER_PREFIX}_${i} --pod=${POD_NAME} localhost/${STAGE_2_IMAGE_NAME} -c \
 	     "sleep ${SLEEP_TIME}; /opt/roadblock/roadblock.py --uuid=${ROADBLOCK_UUID} --role=follower --follower-id=${FOLLOWER_PREFIX}_${i} --redis-server=${REDIS_IP_ADDRESS} \
-  	     --redis-password=${REDIS_PASSWORD} --timeout=${ROADBLOCK_TIMEOUT}"; then
+	     --redis-password=${REDIS_PASSWORD} --timeout=${ROADBLOCK_TIMEOUT} --leader-id=${LEADER_ID}"; then
 	    echo "ERROR: Could not start roadblock follower ${i}"
 	    echo "       This will cause a timeout to occur"
 	fi
