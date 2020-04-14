@@ -10,6 +10,7 @@ STAGE_1_IMAGE_NAME=fedora-redis-python-client
 STAGE_2_IMAGE_NAME=roadblock-client-test
 POD_NAME=roadblock-test
 BUILD=1
+#ROADBLOCK_DEBUG=" --debug "
 
 # goto the root of the repo
 REPO_DIR=$(dirname $0)/../
@@ -94,7 +95,7 @@ if pushd ${REPO_DIR} > /dev/null; then
     echo -e "\nStarting the roadblock leader container"
     if ! podman run --detach=true --interactive=true --tty=true --name=roadblock_leader --pod=${POD_NAME} localhost/${STAGE_2_IMAGE_NAME} -c \
 	 "/opt/roadblock/roadblock.py --uuid=${ROADBLOCK_UUID} --role=leader --redis-server=${REDIS_IP_ADDRESS} --redis-password=${REDIS_PASSWORD} ${FOLLOWERS} \
-	 --timeout=${ROADBLOCK_TIMEOUT} --leader-id=${LEADER_ID}"; then
+	 --timeout=${ROADBLOCK_TIMEOUT} --leader-id=${LEADER_ID} ${ROADBLOCK_DEBUG}"; then
 	echo "ERROR: Could not start the roadblock leader container"
 	exit 5
     fi
@@ -105,7 +106,7 @@ if pushd ${REPO_DIR} > /dev/null; then
 	echo -e "\nStarting the roadblock follower ${i} container with a sleep ${SLEEP_TIME}"
 	if ! podman run --detach --interactive=true --tty=true --name=${FOLLOWER_PREFIX}_${i} --pod=${POD_NAME} localhost/${STAGE_2_IMAGE_NAME} -c \
 	     "sleep ${SLEEP_TIME}; /opt/roadblock/roadblock.py --uuid=${ROADBLOCK_UUID} --role=follower --follower-id=${FOLLOWER_PREFIX}_${i} --redis-server=${REDIS_IP_ADDRESS} \
-	     --redis-password=${REDIS_PASSWORD} --timeout=${ROADBLOCK_TIMEOUT} --leader-id=${LEADER_ID}"; then
+	     --redis-password=${REDIS_PASSWORD} --timeout=${ROADBLOCK_TIMEOUT} --leader-id=${LEADER_ID} ${ROADBLOCK_DEBUG}"; then
 	    echo "ERROR: Could not start roadblock follower ${i}"
 	    echo "       This will cause a timeout to occur"
 	fi
