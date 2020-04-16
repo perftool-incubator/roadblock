@@ -10,6 +10,9 @@ STAGE_1_IMAGE_NAME=fedora-redis-python-client
 STAGE_2_IMAGE_NAME=roadblock-client-test
 POD_NAME=roadblock-test
 BUILD=1
+UPDATE=0
+ABORT_TEST=0
+TIMEOUT_TEST=0
 #ROADBLOCK_DEBUG=" --debug "
 
 # goto the root of the repo
@@ -26,10 +29,12 @@ if pushd ${REPO_DIR} > /dev/null; then
 		exit 1
 	    fi
 	else
-	    echo -e "\nUpdating the stage 1 container image"
-	    if ! buildah bud -t ${STAGE_1_IMAGE_NAME} -f utilities/containers/${STAGE_1_UPDATE_DOCKER_FILE} ${REPO_DIR}; then
-		echo "ERROR: Could not update stage 1 container image"
-		exit 2
+	    if [ "${UPDATE}" == 1 ]; then
+		echo -e "\nUpdating the stage 1 container image"
+		if ! buildah bud -t ${STAGE_1_IMAGE_NAME} -f utilities/containers/${STAGE_1_UPDATE_DOCKER_FILE} ${REPO_DIR}; then
+		    echo "ERROR: Could not update stage 1 container image"
+		    exit 2
+		fi
 	    fi
 	fi
 
@@ -102,11 +107,20 @@ if pushd ${REPO_DIR} > /dev/null; then
 
     # start the roadblock follower container(s)
     for i in $(seq 1 ${NUM_FOLLOWERS}); do
+	ABORT=""
+	if [ "${i}" == "1" ]; then
+	    if [ "${ABORT_TEST}" == "1" ]; then
+		ABORT=" --abort "
+	    fi
+	    if [ "${TIMEOUT_TEST}" == "1" ]; then
+		continue
+	    fi
+	fi
 	SLEEP_TIME=$((RANDOM%20))
 	echo -e "\nStarting the roadblock follower ${i} container with a sleep ${SLEEP_TIME}"
 	if ! podman run --detach --interactive=true --tty=true --name=${FOLLOWER_PREFIX}_${i} --pod=${POD_NAME} localhost/${STAGE_2_IMAGE_NAME} -c \
 	     "sleep ${SLEEP_TIME}; /opt/roadblock/roadblock.py --uuid=${ROADBLOCK_UUID} --role=follower --follower-id=${FOLLOWER_PREFIX}_${i} --redis-server=${REDIS_IP_ADDRESS} \
-	     --redis-password=${REDIS_PASSWORD} --timeout=${ROADBLOCK_TIMEOUT} --leader-id=${LEADER_ID} ${ROADBLOCK_DEBUG}"; then
+	     --redis-password=${REDIS_PASSWORD} --timeout=${ROADBLOCK_TIMEOUT} --leader-id=${LEADER_ID} ${ROADBLOCK_DEBUG} ${ABORT}"; then
 	    echo "ERROR: Could not start roadblock follower ${i}"
 	    echo "       This will cause a timeout to occur"
 	fi
