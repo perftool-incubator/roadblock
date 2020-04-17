@@ -13,6 +13,7 @@ BUILD=1
 UPDATE=0
 ABORT_TEST=0
 TIMEOUT_TEST=0
+RANDOMIZE_INITIATOR=1
 #ROADBLOCK_DEBUG=" --debug "
 
 # goto the root of the repo
@@ -98,8 +99,12 @@ if pushd ${REPO_DIR} > /dev/null; then
 
     # start the roadblock leader container
     echo -e "\nStarting the roadblock leader container"
+    SLEEP_TIME=0
+    if [ "${RANDOMIZE_INITIATOR}" == "1" ]; then
+	SLEEP_TIME=$((RANDOM%20))
+    fi
     if ! podman run --detach=true --interactive=true --tty=true --name=roadblock_leader --pod=${POD_NAME} localhost/${STAGE_2_IMAGE_NAME} -c \
-	 "/opt/roadblock/roadblock.py --uuid=${ROADBLOCK_UUID} --role=leader --redis-server=${REDIS_IP_ADDRESS} --redis-password=${REDIS_PASSWORD} ${FOLLOWERS} \
+	 "sleep ${SLEEP_TIME}; /opt/roadblock/roadblock.py --uuid=${ROADBLOCK_UUID} --role=leader --redis-server=${REDIS_IP_ADDRESS} --redis-password=${REDIS_PASSWORD} ${FOLLOWERS} \
 	 --timeout=${ROADBLOCK_TIMEOUT} --leader-id=${LEADER_ID} ${ROADBLOCK_DEBUG}"; then
 	echo "ERROR: Could not start the roadblock leader container"
 	exit 5
