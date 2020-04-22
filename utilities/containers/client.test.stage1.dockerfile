@@ -5,6 +5,8 @@ USER root
 RUN yum update --assumeyes
 
 RUN yum install --assumeyes python36
+RUN yum install --assumeyes python3-pip
+RUN yum install --assumeyes python3-jsonschema
 
 RUN yum clean all
 
