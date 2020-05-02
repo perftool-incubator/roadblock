@@ -33,6 +33,8 @@ class t_global(object):
                   "ready": {},
                   "gone": {} }
     processed_messages = {}
+    messages = []
+    message_log = None
 
 def debug(log_msg):
     return(print("DEBUG: %s" % (log_msg)))
@@ -264,6 +266,11 @@ def define_msg_schema():
     }
 
 def message_handle (message):
+    if t_global.message_log is not None:
+        # if the message log is open then append messages to the queue
+        # for later dumping
+        t_global.messages.append(message)
+
     msg_uuid = message_get_uuid(message)
     if msg_uuid in t_global.processed_messages:
         if t_global.args.debug:
@@ -471,6 +478,12 @@ def process_options ():
                         help = "Turn on debug output",
                         action = "store_true")
 
+    parser.add_argument("--message-log",
+                        dest = "message_log",
+                        help = "File to log all received messages to.",
+                        default = None,
+                        type = str)
+
     t_global.args = parser.parse_args();
 
 
@@ -487,6 +500,12 @@ def cleanup():
     print("Closing connections")
     t_global.pubsubcon.close()
     t_global.redcon.close()
+
+    if t_global.message_log is not None:
+        # if the message log is open then dump the message queue and
+        # close the file handle
+        print("%s\n" % (json.dumps(t_global.messages, indent = 4, separators=(',', ': '), sort_keys = False)), file=t_global.message_log)
+        t_global.message_log.close()
 
     if t_global.args.debug:
         debug("Processed Messages:")
@@ -539,6 +558,14 @@ def main():
         t_global.my_id = t_global.args.roadblock_follower_id
     elif t_global.args.roadblock_role == "leader":
         t_global.my_id = t_global.args.roadblock_leader_id
+
+    if t_global.args.message_log is not None:
+        # open the message log, if specified
+        try:
+            t_global.message_log = open(t_global.args.message_log, "w")
+        except IOError:
+            print("ERROR: Could not open message log '%s' for writing!" % (t_global.args.message_log))
+            return(-1)
 
     define_msg_schema()
 
