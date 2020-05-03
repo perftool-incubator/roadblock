@@ -628,9 +628,8 @@ def main():
         # publish the initiator information to busB
         print("Sending 'initiator-info' message")
         message_publish(message_build("all", "all", "initiator-info"))
-        if t_global.args.roadblock_role == "leader":
-            t_global.initiator_type = t_global.args.roadblock_role
-            t_global.initiator_id = t_global.my_id
+        t_global.initiator_type = t_global.args.roadblock_role
+        t_global.initiator_id = t_global.my_id
 
         t_global.redcon.rpush(t_global.args.roadblock_uuid + "__initialized", int(True))
     else:
