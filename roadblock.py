@@ -266,11 +266,6 @@ def define_msg_schema():
     }
 
 def message_handle (message):
-    if t_global.message_log is not None:
-        # if the message log is open then append messages to the queue
-        # for later dumping
-        t_global.messages.append(message)
-
     msg_uuid = message_get_uuid(message)
     if msg_uuid in t_global.processed_messages:
         if t_global.args.debug:
@@ -280,6 +275,11 @@ def message_handle (message):
         if t_global.args.debug:
             debug("adding uuid='%s' to the processed messages list" % (msg_uuid))
         t_global.processed_messages[msg_uuid] = True
+
+        if t_global.message_log is not None:
+            # if the message log is open then append messages to the queue
+            # for later dumping
+            t_global.messages.append(message)
 
     msg_command = message_get_command(message)
 
