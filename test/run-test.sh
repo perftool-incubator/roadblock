@@ -106,7 +106,7 @@ if pushd ${REPO_DIR} > /dev/null; then
     fi
     if ! podman run --detach=true --interactive=true --tty=true --name=roadblock_leader --pod=${POD_NAME} localhost/${STAGE_2_IMAGE_NAME} -c \
 	 "sleep ${SLEEP_TIME}; /opt/roadblock/roadblock.py --uuid=${ROADBLOCK_UUID} --role=leader --redis-server=${REDIS_IP_ADDRESS} --redis-password=${REDIS_PASSWORD} ${FOLLOWERS} \
-	 --timeout=${ROADBLOCK_TIMEOUT} --leader-id=${LEADER_ID} --message-log=${MESSAGE_LOG} ${ROADBLOCK_DEBUG}; \
+	 --timeout=${ROADBLOCK_TIMEOUT} --leader-id=${LEADER_ID} --message-log=${MESSAGE_LOG} --user-messages=/opt/roadblock/user-messages.json ${ROADBLOCK_DEBUG}; \
          echo -e \"\nRoadblock Message Log\"; cat ${MESSAGE_LOG}"; then
 	echo "ERROR: Could not start the roadblock leader container"
 	exit 5
@@ -127,7 +127,7 @@ if pushd ${REPO_DIR} > /dev/null; then
 	echo -e "\nStarting the roadblock follower ${i} container with a sleep ${SLEEP_TIME}"
 	if ! podman run --detach --interactive=true --tty=true --name=${FOLLOWER_PREFIX}_${i} --pod=${POD_NAME} localhost/${STAGE_2_IMAGE_NAME} -c \
 	     "sleep ${SLEEP_TIME}; /opt/roadblock/roadblock.py --uuid=${ROADBLOCK_UUID} --role=follower --follower-id=${FOLLOWER_PREFIX}_${i} --redis-server=${REDIS_IP_ADDRESS} \
-	     --redis-password=${REDIS_PASSWORD} --timeout=${ROADBLOCK_TIMEOUT} --leader-id=${LEADER_ID} --message-log=${MESSAGE_LOG} ${ROADBLOCK_DEBUG} ${ABORT}; \
+	     --redis-password=${REDIS_PASSWORD} --timeout=${ROADBLOCK_TIMEOUT} --leader-id=${LEADER_ID} --message-log=${MESSAGE_LOG} --user-messages=/opt/roadblock/user-messages.json ${ROADBLOCK_DEBUG} ${ABORT}; \
              echo -e \"\nRoadblock Message Log\"; cat ${MESSAGE_LOG}"; then
 	    echo "ERROR: Could not start roadblock follower ${i}"
 	    echo "       This will cause a timeout to occur"
