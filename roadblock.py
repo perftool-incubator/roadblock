@@ -33,7 +33,8 @@ class t_global(object):
                   "ready": {},
                   "gone": {} }
     processed_messages = {}
-    messages = []
+    messages = { "sent": [],
+                 "received": [] }
     message_log = None
 
 def debug(log_msg):
@@ -279,7 +280,7 @@ def message_handle (message):
         if t_global.message_log is not None:
             # if the message log is open then append messages to the queue
             # for later dumping
-            t_global.messages.append(message)
+            t_global.messages["received"].append(message)
 
     msg_command = message_get_command(message)
 
@@ -417,6 +418,12 @@ def message_handle (message):
 
 def message_publish(message):
     t_global.redcon.publish(t_global.args.roadblock_uuid + "__busB", message_to_str(message))
+
+    if t_global.message_log is not None:
+        # if the message log is open then append messages to the queue
+        # for later dumping
+        t_global.messages["sent"].append(message)
+
     return(0)
 
 def process_options ():
