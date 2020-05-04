@@ -93,6 +93,8 @@ def message_validate(message):
         return(False)
 
 def message_for_me(message):
+    message["payload"]["recipient"]["timestamp"] = calendar.timegm(time.gmtime())
+
     if message["payload"]["sender"]["id"] == t_global.my_id and message["payload"]["sender"]["type"] == t_global.args.roadblock_role:
         # I'm the sender so ignore it
         return(False)
