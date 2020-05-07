@@ -1,0 +1,27 @@
+[
+    {
+	"recipient": {
+	    "type": "leader",
+	    "id": "roadblock_leader"
+	},
+	"user-string": "this is a test message of arbitrary length"
+    },
+    {
+	"recipient": {
+	    "type": "all",
+	    "id": "all"
+	},
+	"user-object": {
+	    "foo": "property-1",
+	    "bar": "property-2",
+	    "zorg": "property-3",
+	    "foo-bar-zorg": {
+		"array": [
+		    "foo",
+		    "bar",
+		    "zorg"
+		]
+	    }
+	}
+    }
+]

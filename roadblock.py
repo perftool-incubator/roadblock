@@ -11,8 +11,7 @@ import signal
 import hashlib
 import json
 import uuid
-
-from jsonschema import validate
+import jsonschema
 
 # define some global variables
 class t_global(object):
@@ -22,6 +21,7 @@ class t_global(object):
     initiator = False
     mirror_busB = False
     schema = None
+    user_schema = None
     my_id = None
     watch_busA = True
     watch_busB = False
@@ -33,6 +33,10 @@ class t_global(object):
                   "ready": {},
                   "gone": {} }
     processed_messages = {}
+    messages = { "sent": [],
+                 "received": [] }
+    message_log = None
+    user_messages = None
 
 def debug(log_msg):
     return(print("DEBUG: %s" % (log_msg)))
@@ -70,7 +74,12 @@ def message_build_custom(sender_type, sender_id, recipient_type, recipient_id, c
         message["payload"]["recipient"]["id"] = recipient_id
 
     if value is not None:
-        message["payload"]["message"]["value"] = str(value)
+        if command == "user-string":
+            message["payload"]["message"]["user-string"] = value
+        elif command == "user-object":
+            message["payload"]["message"]["user-object"] = value
+        else:
+            message["payload"]["message"]["value"] = str(value)
 
     message["checksum"] = hashlib.sha256(str(message_to_str(message["payload"])).encode("utf-8")).hexdigest()
 
@@ -78,7 +87,7 @@ def message_build_custom(sender_type, sender_id, recipient_type, recipient_id, c
 
 def message_validate(message):
     try:
-        validate(instance=message, schema=t_global.schema)
+        jsonschema.validate(instance=message, schema=t_global.schema)
 
         checksum = hashlib.sha256(str(message_to_str(message["payload"])).encode("utf-8")).hexdigest()
 
@@ -90,6 +99,8 @@ def message_validate(message):
         return(False)
 
 def message_for_me(message):
+    message["payload"]["recipient"]["timestamp"] = calendar.timegm(time.gmtime())
+
     if message["payload"]["sender"]["id"] == t_global.my_id and message["payload"]["sender"]["type"] == t_global.args.roadblock_role:
         # I'm the sender so ignore it
         return(False)
@@ -114,6 +125,74 @@ def message_get_sender_type(message):
 
 def message_get_uuid(message):
     return(message["payload"]["uuid"])
+
+def define_usr_msg_schema():
+    t_global.user_schema = {
+        "type": "array",
+        "minItems": 1,
+        "uniqueItems": True,
+        "items": {
+            "oneOf": [
+                {
+                    "type": "object",
+                    "properties": {
+                        "recipient": {
+                            "$ref": "#/definitions/recipient"
+                        },
+                        "user-string": {
+                            "type": "string",
+                            "minLength": 1
+                        }
+                    },
+                    "required": [
+                        "recipient",
+                        "user-string"
+                    ],
+                    "additionalProperties": False
+                },
+                {
+                    "type": "object",
+                    "properties": {
+                        "recipient": {
+                            "$ref": "#/definitions/recipient"
+                        },
+                        "user-object": {
+                            "type": "object"
+                        }
+                    },
+                    "required": [
+                        "recipient",
+                        "user-object"
+                    ],
+                    "additionalProperties": False
+                }
+            ]
+        },
+        "definitions": {
+            "recipient": {
+                "type": "object",
+                "properties": {
+                    "type": {
+                        "type": "string",
+                        "enum": [
+                            "leader",
+                            "follower",
+                            "all"
+                        ]
+                    },
+                    "id": {
+                        "type": "string",
+                        "minLength": 1
+                    }
+                },
+                "required": [
+                    "type",
+                    "id"
+                ],
+                "additionalProperties": False
+            }
+        }
+    }
 
 def define_msg_schema():
     t_global.schema = {
@@ -213,32 +292,75 @@ def define_msg_schema():
                                     "all-go",
                                     "all-abort",
                                     "follower-gone",
-                                    "all-gone"
+                                    "all-gone",
+                                    "user-string",
+                                    "user-object"
                                 ]
                             },
                             "value": {
                                 "type": "string",
                                 "minLength": 1
-                            }
+                            },
+                            "user-string": {
+                                "type": "string",
+                                "minLength": 1
+                            },
+                            "user-object": {}
                         },
                         "required": [
                             "command"
                         ],
                         "additionalProperties": False,
-                        "if": {
-                            "properties": {
-                                "command": {
-                                    "enum": [
-                                        "timeout-ts"
+                        "allOf": [
+                            {
+                                "if": {
+                                    "properties": {
+                                        "command": {
+                                            "enum": [
+                                                "timeout-ts"
+                                            ]
+                                        }
+                                    }
+                                },
+                                "then": {
+                                    "required": [
+                                        "value"
+                                    ]
+                                }
+                            },
+                            {
+                                "if": {
+                                    "properties": {
+                                        "command": {
+                                            "enum": [
+                                                "user-string"
+                                            ]
+                                        }
+                                    }
+                                },
+                                "then": {
+                                    "required": [
+                                        "user-string"
+                                    ]
+                                }
+                            },
+                            {
+                                "if": {
+                                    "properties": {
+                                        "command": {
+                                            "enum": [
+                                                "user-object"
+                                            ]
+                                        }
+                                    }
+                                },
+                                "then": {
+                                    "required": [
+                                        "user-object"
                                     ]
                                 }
                             }
-                        },
-                        "then": {
-                            "required": [
-                                "value"
-                            ]
-                        }
+                        ]
                     }
                 },
                 "required": [
@@ -263,6 +385,20 @@ def define_msg_schema():
         "additionalProperties": False
     }
 
+def send_user_messages():
+    if t_global.user_messages is not None:
+        print("Sending user requested messages")
+        user_msg_counter = 1
+        for user_msg in t_global.user_messages:
+            if "user-string" in user_msg:
+                print("Sending user message %d: 'user-string'" % (user_msg_counter))
+                message_publish(message_build(user_msg["recipient"]["type"], user_msg["recipient"]["id"], "user-string", user_msg["user-string"]))
+            elif "user-object" in user_msg:
+                print("Sending user message %d: 'user-object'" % (user_msg_counter))
+                message_publish(message_build(user_msg["recipient"]["type"], user_msg["recipient"]["id"], "user-object", user_msg["user-object"]))
+
+            user_msg_counter += 1
+
 def message_handle (message):
     msg_uuid = message_get_uuid(message)
     if msg_uuid in t_global.processed_messages:
@@ -273,6 +409,11 @@ def message_handle (message):
         if t_global.args.debug:
             debug("adding uuid='%s' to the processed messages list" % (msg_uuid))
         t_global.processed_messages[msg_uuid] = True
+
+        if t_global.message_log is not None:
+            # if the message log is open then append messages to the queue
+            # for later dumping
+            t_global.messages["received"].append(message)
 
     msg_command = message_get_command(message)
 
@@ -319,12 +460,15 @@ def message_handle (message):
                 message_publish(message_build("all", "all", "all-online"))
                 if t_global.initiator:
                     t_global.mirror_busB = False
+                send_user_messages()
     elif msg_command == "all-online":
         if t_global.initiator:
             print("Initiator received 'all-online' message")
             t_global.mirror_busB = False
         else:
             print("Received 'all-online' message")
+
+        send_user_messages()
 
         if t_global.args.roadblock_role == "follower":
             if t_global.args.abort:
@@ -410,6 +554,12 @@ def message_handle (message):
 
 def message_publish(message):
     t_global.redcon.publish(t_global.args.roadblock_uuid + "__busB", message_to_str(message))
+
+    if t_global.message_log is not None:
+        # if the message log is open then append messages to the queue
+        # for later dumping
+        t_global.messages["sent"].append(message)
+
     return(0)
 
 def process_options ():
@@ -471,6 +621,18 @@ def process_options ():
                         help = "Turn on debug output",
                         action = "store_true")
 
+    parser.add_argument("--message-log",
+                        dest = "message_log",
+                        help = "File to log all received messages to.",
+                        default = None,
+                        type = str)
+
+    parser.add_argument("--user-messages",
+                        dest = "user_messages",
+                        help = "File to load user specified messages from.",
+                        default = None,
+                        type = str)
+
     t_global.args = parser.parse_args();
 
 
@@ -487,6 +649,12 @@ def cleanup():
     print("Closing connections")
     t_global.pubsubcon.close()
     t_global.redcon.close()
+
+    if t_global.message_log is not None:
+        # if the message log is open then dump the message queue and
+        # close the file handle
+        print("%s\n" % (json.dumps(t_global.messages, indent = 4, separators=(',', ': '), sort_keys = False)), file=t_global.message_log)
+        t_global.message_log.close()
 
     if t_global.args.debug:
         debug("Processed Messages:")
@@ -540,7 +708,32 @@ def main():
     elif t_global.args.roadblock_role == "leader":
         t_global.my_id = t_global.args.roadblock_leader_id
 
+    if t_global.args.message_log is not None:
+        # open the message log, if specified
+        try:
+            t_global.message_log = open(t_global.args.message_log, "w")
+        except IOError:
+            print("ERROR: Could not open message log '%s' for writing!" % (t_global.args.message_log))
+            return(-1)
+
     define_msg_schema()
+    define_usr_msg_schema()
+
+    if t_global.args.user_messages is not None:
+        # load the user messages, if specified
+        try:
+            user_messages = open(t_global.args.user_messages, "r")
+            t_global.user_messages = json.load(user_messages)
+            user_messages.close()
+        except IOError:
+            print("ERROR: Could load the user messages '%s'!" % (t_global.args.user_messages))
+
+        try:
+            jsonschema.validate(instance=t_global.user_messages, schema=t_global.user_schema)
+        except jsonschema.exceptions.SchemaError as e:
+            print(e)
+            print("ERROR: Could not JSON validate the user messages!")
+            return(-1)
 
     # define a signal handler that will respond to SIGALRM when a
     # timeout even occurs
@@ -601,9 +794,8 @@ def main():
         # publish the initiator information to busB
         print("Sending 'initiator-info' message")
         message_publish(message_build("all", "all", "initiator-info"))
-        if t_global.args.roadblock_role == "leader":
-            t_global.initiator_type = t_global.args.roadblock_role
-            t_global.initiator_id = t_global.my_id
+        t_global.initiator_type = t_global.args.roadblock_role
+        t_global.initiator_id = t_global.my_id
 
         t_global.redcon.rpush(t_global.args.roadblock_uuid + "__initialized", int(True))
     else:
