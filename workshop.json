@@ -14,6 +14,30 @@
 	    ]
 	},
 	{
+	    "name": "rhubi7",
+	    "requirements": [
+		"rh-python36",
+		"python-redis",
+		"python-jsonschema"
+	    ]
+	},
+	{
+	    "name": "opensuse",
+	    "requirements": [
+		"python3",
+		"python-redis",
+		"python-jsonschema"
+	    ]
+	},
+	{
+	    "name": "debian",
+	    "requirements": [
+		"python3",
+		"python-redis",
+		"python-jsonschema"
+	    ]
+	},
+	{
 	    "name": "fedora31",
 	    "requirements": [
 		"python36",
@@ -29,6 +53,15 @@
 	    "distro_info": {
 		"packages": [
 		    "python36"
+		]
+	    }
+	},
+	{
+	    "name": "python3",
+	    "type": "distro",
+	    "distro_info": {
+		"packages": [
+		    "python3"
 		]
 	    }
 	},
