@@ -1,4 +1,4 @@
-FROM docker.io/library/fedora
+FROM docker.io/library/fedora:32
 USER root
 
 
