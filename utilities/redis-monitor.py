@@ -31,9 +31,16 @@ def process_options ():
 def main():
     process_options()
 
-    redcon = redis.Redis(host = t_global.args.redis_server,
-                         port = 6379,
-                         password = t_global.args.redis_password)
+    try:
+        redcon = redis.Redis(host = t_global.args.redis_server,
+                             port = 6379,
+                             password = t_global.args.redis_password,
+                             health_check_interval = 0)
+        redcon.ping()
+    except redis.exceptions.ConnectionError as con_error:
+        print("%s" % (con_error))
+        print("ERROR: Redis connection could not be opened!")
+        return(-1)
 
     with redcon.monitor() as m:
         for command in m.listen():
