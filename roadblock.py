@@ -740,9 +740,17 @@ def main():
     signal.signal(signal.SIGALRM, sighandler)
 
     # create the redis connections
-    t_global.redcon = redis.Redis(host = t_global.args.roadblock_redis_server,
-                                  port = 6379,
-                                  password = t_global.args.roadblock_redis_password)
+    try:
+        t_global.redcon = redis.Redis(host = t_global.args.roadblock_redis_server,
+                                      port = 6379,
+                                      password = t_global.args.roadblock_redis_password,
+                                      health_check_interval = 0)
+        t_global.redcon.ping()
+    except redis.exceptions.ConnectionError as con_error:
+        print("%s" % (con_error))
+        print("ERROR: Redis connection could not be opened!")
+        return(-4)
+
     t_global.pubsubcon = t_global.redcon.pubsub(ignore_subscribe_messages = True)
 
     print("Roadblock UUID: %s" % (t_global.args.roadblock_uuid))
