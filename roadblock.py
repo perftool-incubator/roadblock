@@ -12,10 +12,15 @@ import hashlib
 import json
 import uuid
 import jsonschema
+import threading
 
 # define some global variables
 class t_global(object):
     args = None
+    con_pool = None
+    con_pool_state = False
+    con_watchdog_exit = None
+    con_watchdog = None
     redcon = None
     pubsubcon = None
     initiator = False
@@ -646,9 +651,13 @@ def cleanup():
         t_global.redcon.delete(t_global.args.roadblock_uuid + "__initialized")
         t_global.redcon.delete(t_global.args.roadblock_uuid + "__busA")
 
-    print("Closing connections")
-    t_global.pubsubcon.close()
-    t_global.redcon.close()
+    print("Closing connection pool watchdog")
+    t_global.con_watchdog_exit.set()
+    t_global.con_watchdog.join()
+
+    print("Closing connection pool")
+    t_global.con_pool.disconnect()
+    t_global.con_pool_state = False
 
     if t_global.message_log is not None:
         # if the message log is open then dump the message queue and
@@ -682,6 +691,21 @@ def sighandler(signum, frame):
         do_timeout()
     else:
         print("Signal handler called with signal", signum)
+
+    return(0)
+
+def connection_watchdog():
+    while not t_global.con_watchdog_exit.is_set():
+        time.sleep(1)
+        try:
+            if t_global.con_pool_state:
+                t_global.redcon.ping()
+            else:
+                print("ERROR: con_pool_state=False")
+        except redis.exceptions.ConnectionError as con_error:
+            t_global.con_pool_state = False
+            print("%s" % (con_error))
+            print("ERROR: Redis connection failed")
 
     return(0)
 
@@ -741,17 +765,24 @@ def main():
 
     # create the redis connections
     try:
-        t_global.redcon = redis.Redis(host = t_global.args.roadblock_redis_server,
-                                      port = 6379,
-                                      password = t_global.args.roadblock_redis_password,
-                                      health_check_interval = 0)
+        t_global.con_pool = redis.ConnectionPool(host = t_global.args.roadblock_redis_server,
+                                                 password = t_global.args.roadblock_redis_password,
+                                                 port = 6379,
+                                                 db = 0,
+                                                 health_check_interval = 0)
+        t_global.redcon = redis.Redis(connection_pool = t_global.con_pool)
         t_global.redcon.ping()
+        t_global.con_pool_state = True
     except redis.exceptions.ConnectionError as con_error:
         print("%s" % (con_error))
         print("ERROR: Redis connection could not be opened!")
         return(-4)
 
     t_global.pubsubcon = t_global.redcon.pubsub(ignore_subscribe_messages = True)
+
+    t_global.con_watchdog_exit = threading.Event()
+    t_global.con_watchdog = threading.Thread(target = connection_watchdog, args = ())
+    t_global.con_watchdog.start()
 
     print("Roadblock UUID: %s" % (t_global.args.roadblock_uuid))
     print("Role: %s" % (t_global.args.roadblock_role))
