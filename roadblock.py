@@ -558,12 +558,99 @@ def message_handle (message):
     return(0)
 
 def message_publish(message):
-    t_global.redcon.publish(t_global.args.roadblock_uuid + "__busB", message_to_str(message))
+    message_str = message_to_str(message)
+
+    ret_val = 0
+    counter = 0
+    while ret_val == 0:
+        counter += 1
+        # this call should return the number of clients that receive the message
+        # we expect it to be greater than zero, if not we retry
+        ret_val = t_global.redcon.publish(t_global.args.roadblock_uuid + "__busB", message_str)
+
+        if ret_val == 0:
+            print("WARNING: Failed attempt %d to publish message '%s'" % (counter, message))
+
+            backoff(counter)
 
     if t_global.message_log is not None:
         # if the message log is open then append messages to the queue
         # for later dumping
         t_global.messages["sent"].append(message)
+
+    return(0)
+
+def key_delete(key):
+    ret_val = 0
+    counter = 0
+    while ret_val == 0:
+        counter += 1
+        # this call should return the number of keys deleted which is
+        # expected to be one, if not we retry
+        ret_val = t_global.redcon.delete(key)
+
+        if ret_val == 0:
+            print("WARNING: Failed attempt %d to delete key '%s'" % (counter, key))
+
+            backoff(counter)
+
+    return(0)
+
+def key_set_once(key, value):
+    ret_val = 0
+    counter = 0
+    while ret_val == 0:
+        counter += 1
+        # this call should return one on success, if not we retry
+        ret_val = t_global.redcon.msetnx( { key: value } )
+
+        if ret_val == 0:
+            print("WARNING: Failed attempt %d to set key '%s' with value '%s' once" % (counter, key, value))
+
+            backoff(counter)
+
+    return(0)
+
+def key_set(key, value):
+    # in this case we want to return the true/false behavior so the
+    # caller knows if they set the key or it already existed
+    return t_global.redcon.msetnx( { key: value } )
+
+def key_check(key):
+    # inform the caller whether the key already existed or not
+    return t_global.redcon.exists(key)
+
+def list_append(key, value):
+    ret_val = 0
+    counter = 0
+    while ret_val == 0:
+        # if this call returns 0 then it failed somehow since it
+        # should be the size of the list after we have added to it, so
+        # we retry
+        ret_val = t_global.redcon.rpush(key, value)
+
+        if ret_val == 0:
+            print("WARNING: Failed attempt %d to append value '%s' to key '%s'" % (counter, value, key))
+
+            backoff(counter)
+
+    return(ret_val)
+
+def list_fetch(key, offset):
+    # return the elements in the specified range (offset to end), this
+    # could be empty so we can't really verify it
+    return t_global.redcon.lrange(key, offset, -1)
+
+def backoff(attempts):
+    if attempts <= 10:
+        # no back off, try really hard (spin)
+        attempts = attempts
+    elif attempts > 10 and attempts <= 50:
+        # back off a bit, don't spin as quickly
+        time.sleep(0.1)
+    else:
+        # back off more, spin even slower
+        time.sleep(0.5)
 
     return(0)
 
@@ -647,9 +734,9 @@ def cleanup():
 
     if t_global.args.roadblock_role == "leader":
         print("Removing db objects specific to this roadblock")
-        t_global.redcon.delete(t_global.args.roadblock_uuid)
-        t_global.redcon.delete(t_global.args.roadblock_uuid + "__initialized")
-        t_global.redcon.delete(t_global.args.roadblock_uuid + "__busA")
+        key_delete(t_global.args.roadblock_uuid)
+        key_delete(t_global.args.roadblock_uuid + "__initialized")
+        key_delete(t_global.args.roadblock_uuid + "__busA")
 
     print("Closing connection pool watchdog")
     t_global.con_watchdog_exit.set()
@@ -680,7 +767,7 @@ def do_timeout():
         # already failed.  done by the first member since that is the
         # only member that is guaranteed to have actually reached the
         # roadblock and be capable of setting this.
-        t_global.redcon.msetnx({t_global.args.roadblock_uuid + "__timedout": int(True)})
+        key_set_once(t_global.args.roadblock_uuid + "__timedout", int(True))
     cleanup()
     print("ERROR: Roadblock failed with timeout")
     exit(-3)
@@ -799,7 +886,7 @@ def main():
 
     # check if the roadblock was previously created and already timed
     # out -- ie. I am very late
-    if t_global.redcon.exists(t_global.args.roadblock_uuid + "__timedout"):
+    if key_check(t_global.args.roadblock_uuid + "__timedout"):
         do_timeout()
 
     # set the default timeout alarm
@@ -810,7 +897,7 @@ def main():
     print("Timeout: %s" % (datetime.datetime.utcfromtimestamp(cluster_timeout).strftime("%Y-%m-%d at %H:%M:%S UTC")))
 
     # check if the roadblock has been initialized yet
-    if t_global.redcon.msetnx({t_global.args.roadblock_uuid: mytime}):
+    if key_set(t_global.args.roadblock_uuid, mytime):
         # i am creating the roadblock
         t_global.initiator = True
         print("Initiator: True")
@@ -821,7 +908,7 @@ def main():
         t_global.mirror_busB = True
 
         # create busA
-        t_global.redcon.rpush(t_global.args.roadblock_uuid + "__busA", message_to_str(message_build("all", "all", "initialized")))
+        list_append(t_global.args.roadblock_uuid + "__busA", message_to_str(message_build("all", "all", "initialized")))
 
         # create/subscribe to busB
         t_global.pubsubcon.subscribe(t_global.args.roadblock_uuid + "__busB")
@@ -836,7 +923,7 @@ def main():
         t_global.initiator_type = t_global.args.roadblock_role
         t_global.initiator_id = t_global.my_id
 
-        t_global.redcon.rpush(t_global.args.roadblock_uuid + "__initialized", int(True))
+        list_append(t_global.args.roadblock_uuid + "__initialized", int(True))
     else:
         print("Initiator: False")
 
@@ -845,7 +932,7 @@ def main():
         print("Waiting for roadblock initialization to complete")
 
         # wait until the initialized flag has been set for the roadblock
-        while not t_global.redcon.exists(t_global.args.roadblock_uuid + "__initialized"):
+        while not key_check(t_global.args.roadblock_uuid + "__initialized"):
             time.sleep(1)
             print(".")
 
@@ -885,7 +972,7 @@ def main():
                 print("initiator received a message which did not validate! [%s]" % (msg_str))
             else:
                 # copy the message over to busA
-                t_global.redcon.rpush(t_global.args.roadblock_uuid + "__busA", msg_str)
+                list_append(t_global.args.roadblock_uuid + "__busA", msg_str)
 
                 if not message_for_me(msg):
                     if t_global.args.debug:
@@ -906,7 +993,7 @@ def main():
         get_out = False
         while t_global.watch_busA:
             # retrieve unprocessed messages from busA
-            msg_list = t_global.redcon.lrange(t_global.args.roadblock_uuid + "__busA", msg_list_index+1, -1)
+            msg_list = list_fetch(t_global.args.roadblock_uuid + "__busA", msg_list_index+1)
 
             # process any retrieved messages
             if len(msg_list):
