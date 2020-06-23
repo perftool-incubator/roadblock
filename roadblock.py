@@ -759,6 +759,13 @@ def cleanup():
 
     return(0)
 
+def get_followers_list(followers):
+    followers_list = ""
+
+    for follower in followers:
+        followers_list += follower + " "
+
+    return(followers_list)
 
 def do_timeout():
     if t_global.initiator:
@@ -768,8 +775,19 @@ def do_timeout():
         # only member that is guaranteed to have actually reached the
         # roadblock and be capable of setting this.
         key_set_once(t_global.args.roadblock_uuid + "__timedout", int(True))
+
     cleanup()
+
     print("ERROR: Roadblock failed with timeout")
+
+    if t_global.args.roadblock_role == "leader":
+        if len(t_global.followers["online"]) != 0:
+            print("These followers never reached 'online': %s" % (get_followers_list(t_global.followers["online"])))
+        elif len(t_global.followers["ready"]) != 0:
+            print("These followers never reached 'ready': %s" % (get_followers_list(t_global.followers["ready"])))
+        elif len(t_global.followers["gone"]) != 0:
+            print("These followers never reach 'gone': %s" % (get_followers_list(t_global.followers["gone"])))
+
     exit(-3)
 
 
