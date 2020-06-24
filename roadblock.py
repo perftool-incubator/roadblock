@@ -985,33 +985,39 @@ def main():
         # them onto busA so that they are preserved for other members
         # to receive once they arrive at the roadblock
 
-        for msg in t_global.pubsubcon.listen():
-            msg_str = msg["data"].decode()
-            if t_global.args.debug:
-                debug("initiator received msg=[%s] on busB" % (msg_str))
+        while t_global.mirror_busB:
+            msg = t_global.pubsubcon.get_message()
 
-            msg = message_from_str(msg_str)
-
-            if not message_validate(msg):
-                print("initiator received a message which did not validate! [%s]" % (msg_str))
+            if not msg:
+                time.sleep(0.001)
             else:
-                # copy the message over to busA
-                list_append(t_global.args.roadblock_uuid + "__busA", msg_str)
+                msg_str = msg["data"].decode()
+                if t_global.args.debug:
+                    debug("initiator received msg=[%s] on busB" % (msg_str))
 
-                if not message_for_me(msg):
-                    if t_global.args.debug:
-                        debug("initiator received a message which is not for me! [%s]" % (msg_str))
+                msg = message_from_str(msg_str)
+
+                if not message_validate(msg):
+                    print("initiator received a message which did not validate! [%s]" % (msg_str))
                 else:
+                    # copy the message over to busA
                     if t_global.args.debug:
-                        debug("initiator received a message for me! [%s]" % (msg_str))
-                    ret_val = message_handle(msg)
-                    if ret_val:
-                        return(ret_val)
+                        debug("initiator mirroring msg=[%s] to busA" % (msg_str))
+                    list_append(t_global.args.roadblock_uuid + "__busA", msg_str)
+
+                    if not message_for_me(msg):
+                        if t_global.args.debug:
+                            debug("initiator received a message which is not for me! [%s]" % (msg_str))
+                    else:
+                        if t_global.args.debug:
+                            debug("initiator received a message for me! [%s]" % (msg_str))
+                        ret_val = message_handle(msg)
+                        if ret_val:
+                            return(ret_val)
 
             if not t_global.mirror_busB:
                 if t_global.args.debug:
                     debug("initiator stopping busB mirroring to busA")
-                break
     else:
         msg_list_index = -1
         get_out = False
@@ -1048,7 +1054,11 @@ def main():
         debug("moving to common busB watch loop")
 
     while t_global.watch_busB:
-        for msg in t_global.pubsubcon.listen():
+        msg = t_global.pubsubcon.get_message()
+
+        if not msg:
+            time.sleep(0.001)
+        else:
             msg_str = msg["data"].decode()
             if t_global.args.debug:
                 debug("received msg=[%s] on busB" % (msg_str))
@@ -1067,9 +1077,6 @@ def main():
                     ret_val = message_handle(msg)
                     if ret_val:
                         return(ret_val)
-
-            if not t_global.watch_busB:
-                break
 
     print("Cleaning up")
     cleanup()
