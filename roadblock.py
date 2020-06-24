@@ -16,6 +16,7 @@ import threading
 
 # define some global variables
 class t_global(object):
+    alarm_active = False
     args = None
     con_pool = None
     con_pool_state = False
@@ -432,10 +433,12 @@ def message_handle (message):
 
         if timeout < 0:
             signal.alarm(abs(timeout))
+            t_global.alarm_active = True
             print("The new timeout value is in %d seconds" % (abs(timeout)))
             print("Timeout: %s" % (datetime.datetime.utcfromtimestamp(cluster_timeout).strftime("%Y-%m-%d at %H:%M:%S UTC")))
         else:
             signal.alarm(0)
+            t_global.alarm_active = False
             print("The timeout has already occurred")
             return(-2)
     elif msg_command == "switch-buses":
@@ -729,8 +732,9 @@ def process_options ():
 
 
 def cleanup():
-    print("Disabling timeout alarm")
-    signal.alarm(0)
+    if t_global.alarm_active:
+        print("Disabling timeout alarm")
+        signal.alarm(0)
 
     if t_global.args.roadblock_role == "leader":
         print("Removing db objects specific to this roadblock")
@@ -793,6 +797,7 @@ def do_timeout():
 
 def sighandler(signum, frame):
     if signum == 14: # SIGALRM
+        t_global.alarm_active = False
         do_timeout()
     else:
         print("Signal handler called with signal", signum)
@@ -909,6 +914,7 @@ def main():
 
     # set the default timeout alarm
     signal.alarm(t_global.args.roadblock_timeout)
+    t_global.alarm_active = True
     mytime = calendar.timegm(time.gmtime())
     print("Current Time: %s" % (datetime.datetime.utcfromtimestamp(mytime).strftime("%Y-%m-%d at %H:%M:%S UTC")))
     cluster_timeout = mytime + t_global.args.roadblock_timeout
