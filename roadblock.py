@@ -12,10 +12,16 @@ import hashlib
 import json
 import uuid
 import jsonschema
+import threading
 
 # define some global variables
 class t_global(object):
+    alarm_active = False
     args = None
+    con_pool = None
+    con_pool_state = False
+    con_watchdog_exit = None
+    con_watchdog = None
     redcon = None
     pubsubcon = None
     initiator = False
@@ -427,10 +433,12 @@ def message_handle (message):
 
         if timeout < 0:
             signal.alarm(abs(timeout))
+            t_global.alarm_active = True
             print("The new timeout value is in %d seconds" % (abs(timeout)))
             print("Timeout: %s" % (datetime.datetime.utcfromtimestamp(cluster_timeout).strftime("%Y-%m-%d at %H:%M:%S UTC")))
         else:
             signal.alarm(0)
+            t_global.alarm_active = False
             print("The timeout has already occurred")
             return(-2)
     elif msg_command == "switch-buses":
@@ -553,12 +561,99 @@ def message_handle (message):
     return(0)
 
 def message_publish(message):
-    t_global.redcon.publish(t_global.args.roadblock_uuid + "__busB", message_to_str(message))
+    message_str = message_to_str(message)
+
+    ret_val = 0
+    counter = 0
+    while ret_val == 0:
+        counter += 1
+        # this call should return the number of clients that receive the message
+        # we expect it to be greater than zero, if not we retry
+        ret_val = t_global.redcon.publish(t_global.args.roadblock_uuid + "__busB", message_str)
+
+        if ret_val == 0:
+            print("WARNING: Failed attempt %d to publish message '%s'" % (counter, message))
+
+            backoff(counter)
 
     if t_global.message_log is not None:
         # if the message log is open then append messages to the queue
         # for later dumping
         t_global.messages["sent"].append(message)
+
+    return(0)
+
+def key_delete(key):
+    ret_val = 0
+    counter = 0
+    while ret_val == 0:
+        counter += 1
+        # this call should return the number of keys deleted which is
+        # expected to be one, if not we retry
+        ret_val = t_global.redcon.delete(key)
+
+        if ret_val == 0:
+            print("WARNING: Failed attempt %d to delete key '%s'" % (counter, key))
+
+            backoff(counter)
+
+    return(0)
+
+def key_set_once(key, value):
+    ret_val = 0
+    counter = 0
+    while ret_val == 0:
+        counter += 1
+        # this call should return one on success, if not we retry
+        ret_val = t_global.redcon.msetnx( { key: value } )
+
+        if ret_val == 0:
+            print("WARNING: Failed attempt %d to set key '%s' with value '%s' once" % (counter, key, value))
+
+            backoff(counter)
+
+    return(0)
+
+def key_set(key, value):
+    # in this case we want to return the true/false behavior so the
+    # caller knows if they set the key or it already existed
+    return t_global.redcon.msetnx( { key: value } )
+
+def key_check(key):
+    # inform the caller whether the key already existed or not
+    return t_global.redcon.exists(key)
+
+def list_append(key, value):
+    ret_val = 0
+    counter = 0
+    while ret_val == 0:
+        # if this call returns 0 then it failed somehow since it
+        # should be the size of the list after we have added to it, so
+        # we retry
+        ret_val = t_global.redcon.rpush(key, value)
+
+        if ret_val == 0:
+            print("WARNING: Failed attempt %d to append value '%s' to key '%s'" % (counter, value, key))
+
+            backoff(counter)
+
+    return(ret_val)
+
+def list_fetch(key, offset):
+    # return the elements in the specified range (offset to end), this
+    # could be empty so we can't really verify it
+    return t_global.redcon.lrange(key, offset, -1)
+
+def backoff(attempts):
+    if attempts <= 10:
+        # no back off, try really hard (spin)
+        attempts = attempts
+    elif attempts > 10 and attempts <= 50:
+        # back off a bit, don't spin as quickly
+        time.sleep(0.1)
+    else:
+        # back off more, spin even slower
+        time.sleep(0.5)
 
     return(0)
 
@@ -637,18 +732,23 @@ def process_options ():
 
 
 def cleanup():
-    print("Disabling timeout alarm")
-    signal.alarm(0)
+    if t_global.alarm_active:
+        print("Disabling timeout alarm")
+        signal.alarm(0)
 
     if t_global.args.roadblock_role == "leader":
         print("Removing db objects specific to this roadblock")
-        t_global.redcon.delete(t_global.args.roadblock_uuid)
-        t_global.redcon.delete(t_global.args.roadblock_uuid + "__initialized")
-        t_global.redcon.delete(t_global.args.roadblock_uuid + "__busA")
+        key_delete(t_global.args.roadblock_uuid)
+        key_delete(t_global.args.roadblock_uuid + "__initialized")
+        key_delete(t_global.args.roadblock_uuid + "__busA")
 
-    print("Closing connections")
-    t_global.pubsubcon.close()
-    t_global.redcon.close()
+    print("Closing connection pool watchdog")
+    t_global.con_watchdog_exit.set()
+    t_global.con_watchdog.join()
+
+    print("Closing connection pool")
+    t_global.con_pool.disconnect()
+    t_global.con_pool_state = False
 
     if t_global.message_log is not None:
         # if the message log is open then dump the message queue and
@@ -663,6 +763,13 @@ def cleanup():
 
     return(0)
 
+def get_followers_list(followers):
+    followers_list = ""
+
+    for follower in followers:
+        followers_list += follower + " "
+
+    return(followers_list)
 
 def do_timeout():
     if t_global.initiator:
@@ -671,17 +778,44 @@ def do_timeout():
         # already failed.  done by the first member since that is the
         # only member that is guaranteed to have actually reached the
         # roadblock and be capable of setting this.
-        t_global.redcon.msetnx({t_global.args.roadblock_uuid + "__timedout": int(True)})
+        key_set_once(t_global.args.roadblock_uuid + "__timedout", int(True))
+
     cleanup()
+
     print("ERROR: Roadblock failed with timeout")
+
+    if t_global.args.roadblock_role == "leader":
+        if len(t_global.followers["online"]) != 0:
+            print("These followers never reached 'online': %s" % (get_followers_list(t_global.followers["online"])))
+        elif len(t_global.followers["ready"]) != 0:
+            print("These followers never reached 'ready': %s" % (get_followers_list(t_global.followers["ready"])))
+        elif len(t_global.followers["gone"]) != 0:
+            print("These followers never reach 'gone': %s" % (get_followers_list(t_global.followers["gone"])))
+
     exit(-3)
 
 
 def sighandler(signum, frame):
     if signum == 14: # SIGALRM
+        t_global.alarm_active = False
         do_timeout()
     else:
         print("Signal handler called with signal", signum)
+
+    return(0)
+
+def connection_watchdog():
+    while not t_global.con_watchdog_exit.is_set():
+        time.sleep(1)
+        try:
+            if t_global.con_pool_state:
+                t_global.redcon.ping()
+            else:
+                print("ERROR: con_pool_state=False")
+        except redis.exceptions.ConnectionError as con_error:
+            t_global.con_pool_state = False
+            print("%s" % (con_error))
+            print("ERROR: Redis connection failed")
 
     return(0)
 
@@ -741,17 +875,24 @@ def main():
 
     # create the redis connections
     try:
-        t_global.redcon = redis.Redis(host = t_global.args.roadblock_redis_server,
-                                      port = 6379,
-                                      password = t_global.args.roadblock_redis_password,
-                                      health_check_interval = 0)
+        t_global.con_pool = redis.ConnectionPool(host = t_global.args.roadblock_redis_server,
+                                                 password = t_global.args.roadblock_redis_password,
+                                                 port = 6379,
+                                                 db = 0,
+                                                 health_check_interval = 0)
+        t_global.redcon = redis.Redis(connection_pool = t_global.con_pool)
         t_global.redcon.ping()
+        t_global.con_pool_state = True
     except redis.exceptions.ConnectionError as con_error:
         print("%s" % (con_error))
         print("ERROR: Redis connection could not be opened!")
         return(-4)
 
     t_global.pubsubcon = t_global.redcon.pubsub(ignore_subscribe_messages = True)
+
+    t_global.con_watchdog_exit = threading.Event()
+    t_global.con_watchdog = threading.Thread(target = connection_watchdog, args = ())
+    t_global.con_watchdog.start()
 
     print("Roadblock UUID: %s" % (t_global.args.roadblock_uuid))
     print("Role: %s" % (t_global.args.roadblock_role))
@@ -768,18 +909,19 @@ def main():
 
     # check if the roadblock was previously created and already timed
     # out -- ie. I am very late
-    if t_global.redcon.exists(t_global.args.roadblock_uuid + "__timedout"):
+    if key_check(t_global.args.roadblock_uuid + "__timedout"):
         do_timeout()
 
     # set the default timeout alarm
     signal.alarm(t_global.args.roadblock_timeout)
+    t_global.alarm_active = True
     mytime = calendar.timegm(time.gmtime())
     print("Current Time: %s" % (datetime.datetime.utcfromtimestamp(mytime).strftime("%Y-%m-%d at %H:%M:%S UTC")))
     cluster_timeout = mytime + t_global.args.roadblock_timeout
     print("Timeout: %s" % (datetime.datetime.utcfromtimestamp(cluster_timeout).strftime("%Y-%m-%d at %H:%M:%S UTC")))
 
     # check if the roadblock has been initialized yet
-    if t_global.redcon.msetnx({t_global.args.roadblock_uuid: mytime}):
+    if key_set(t_global.args.roadblock_uuid, mytime):
         # i am creating the roadblock
         t_global.initiator = True
         print("Initiator: True")
@@ -790,7 +932,7 @@ def main():
         t_global.mirror_busB = True
 
         # create busA
-        t_global.redcon.rpush(t_global.args.roadblock_uuid + "__busA", message_to_str(message_build("all", "all", "initialized")))
+        list_append(t_global.args.roadblock_uuid + "__busA", message_to_str(message_build("all", "all", "initialized")))
 
         # create/subscribe to busB
         t_global.pubsubcon.subscribe(t_global.args.roadblock_uuid + "__busB")
@@ -805,7 +947,7 @@ def main():
         t_global.initiator_type = t_global.args.roadblock_role
         t_global.initiator_id = t_global.my_id
 
-        t_global.redcon.rpush(t_global.args.roadblock_uuid + "__initialized", int(True))
+        list_append(t_global.args.roadblock_uuid + "__initialized", int(True))
     else:
         print("Initiator: False")
 
@@ -814,7 +956,7 @@ def main():
         print("Waiting for roadblock initialization to complete")
 
         # wait until the initialized flag has been set for the roadblock
-        while not t_global.redcon.exists(t_global.args.roadblock_uuid + "__initialized"):
+        while not key_check(t_global.args.roadblock_uuid + "__initialized"):
             time.sleep(1)
             print(".")
 
@@ -843,39 +985,45 @@ def main():
         # them onto busA so that they are preserved for other members
         # to receive once they arrive at the roadblock
 
-        for msg in t_global.pubsubcon.listen():
-            msg_str = msg["data"].decode()
-            if t_global.args.debug:
-                debug("initiator received msg=[%s] on busB" % (msg_str))
+        while t_global.mirror_busB:
+            msg = t_global.pubsubcon.get_message()
 
-            msg = message_from_str(msg_str)
-
-            if not message_validate(msg):
-                print("initiator received a message which did not validate! [%s]" % (msg_str))
+            if not msg:
+                time.sleep(0.001)
             else:
-                # copy the message over to busA
-                t_global.redcon.rpush(t_global.args.roadblock_uuid + "__busA", msg_str)
+                msg_str = msg["data"].decode()
+                if t_global.args.debug:
+                    debug("initiator received msg=[%s] on busB" % (msg_str))
 
-                if not message_for_me(msg):
-                    if t_global.args.debug:
-                        debug("initiator received a message which is not for me! [%s]" % (msg_str))
+                msg = message_from_str(msg_str)
+
+                if not message_validate(msg):
+                    print("initiator received a message which did not validate! [%s]" % (msg_str))
                 else:
+                    # copy the message over to busA
                     if t_global.args.debug:
-                        debug("initiator received a message for me! [%s]" % (msg_str))
-                    ret_val = message_handle(msg)
-                    if ret_val:
-                        return(ret_val)
+                        debug("initiator mirroring msg=[%s] to busA" % (msg_str))
+                    list_append(t_global.args.roadblock_uuid + "__busA", msg_str)
+
+                    if not message_for_me(msg):
+                        if t_global.args.debug:
+                            debug("initiator received a message which is not for me! [%s]" % (msg_str))
+                    else:
+                        if t_global.args.debug:
+                            debug("initiator received a message for me! [%s]" % (msg_str))
+                        ret_val = message_handle(msg)
+                        if ret_val:
+                            return(ret_val)
 
             if not t_global.mirror_busB:
                 if t_global.args.debug:
                     debug("initiator stopping busB mirroring to busA")
-                break
     else:
         msg_list_index = -1
         get_out = False
         while t_global.watch_busA:
             # retrieve unprocessed messages from busA
-            msg_list = t_global.redcon.lrange(t_global.args.roadblock_uuid + "__busA", msg_list_index+1, -1)
+            msg_list = list_fetch(t_global.args.roadblock_uuid + "__busA", msg_list_index+1)
 
             # process any retrieved messages
             if len(msg_list):
@@ -906,7 +1054,11 @@ def main():
         debug("moving to common busB watch loop")
 
     while t_global.watch_busB:
-        for msg in t_global.pubsubcon.listen():
+        msg = t_global.pubsubcon.get_message()
+
+        if not msg:
+            time.sleep(0.001)
+        else:
             msg_str = msg["data"].decode()
             if t_global.args.debug:
                 debug("received msg=[%s] on busB" % (msg_str))
@@ -925,9 +1077,6 @@ def main():
                     ret_val = message_handle(msg)
                     if ret_val:
                         return(ret_val)
-
-            if not t_global.watch_busB:
-                break
 
     print("Cleaning up")
     cleanup()
