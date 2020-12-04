@@ -736,19 +736,20 @@ def cleanup():
         print("Disabling timeout alarm")
         signal.alarm(0)
 
-    if t_global.args.roadblock_role == "leader":
-        print("Removing db objects specific to this roadblock")
-        key_delete(t_global.args.roadblock_uuid)
-        key_delete(t_global.args.roadblock_uuid + "__initialized")
-        key_delete(t_global.args.roadblock_uuid + "__busA")
+    if t_global.con_pool_state:
+        if t_global.args.roadblock_role == "leader":
+            print("Removing db objects specific to this roadblock")
+            key_delete(t_global.args.roadblock_uuid)
+            key_delete(t_global.args.roadblock_uuid + "__initialized")
+            key_delete(t_global.args.roadblock_uuid + "__busA")
 
-    print("Closing connection pool watchdog")
-    t_global.con_watchdog_exit.set()
-    t_global.con_watchdog.join()
+        print("Closing connection pool watchdog")
+        t_global.con_watchdog_exit.set()
+        t_global.con_watchdog.join()
 
-    print("Closing connection pool")
-    t_global.con_pool.disconnect()
-    t_global.con_pool_state = False
+        print("Closing connection pool")
+        t_global.con_pool.disconnect()
+        t_global.con_pool_state = False
 
     if t_global.message_log is not None:
         # if the message log is open then dump the message queue and
@@ -772,7 +773,9 @@ def get_followers_list(followers):
     return(followers_list)
 
 def do_timeout():
-    if t_global.initiator:
+    print("ERROR: Roadblock failed with timeout")
+
+    if t_global.con_pool_state and t_global.initiator:
         # set a persistent flag that the roadblock timed out so that
         # any late arriving members know that the roadblock has
         # already failed.  done by the first member since that is the
@@ -781,8 +784,6 @@ def do_timeout():
         key_set_once(t_global.args.roadblock_uuid + "__timedout", int(True))
 
     cleanup()
-
-    print("ERROR: Roadblock failed with timeout")
 
     if t_global.args.roadblock_role == "leader":
         if len(t_global.followers["online"]) != 0:
@@ -873,20 +874,29 @@ def main():
     # timeout even occurs
     signal.signal(signal.SIGALRM, sighandler)
 
+    # set the default timeout alarm
+    signal.alarm(t_global.args.roadblock_timeout)
+    t_global.alarm_active = True
+    mytime = calendar.timegm(time.gmtime())
+    print("Current Time: %s" % (datetime.datetime.utcfromtimestamp(mytime).strftime("%Y-%m-%d at %H:%M:%S UTC")))
+    cluster_timeout = mytime + t_global.args.roadblock_timeout
+    print("Timeout: %s" % (datetime.datetime.utcfromtimestamp(cluster_timeout).strftime("%Y-%m-%d at %H:%M:%S UTC")))
+
     # create the redis connections
-    try:
-        t_global.con_pool = redis.ConnectionPool(host = t_global.args.roadblock_redis_server,
-                                                 password = t_global.args.roadblock_redis_password,
-                                                 port = 6379,
-                                                 db = 0,
-                                                 health_check_interval = 0)
-        t_global.redcon = redis.Redis(connection_pool = t_global.con_pool)
-        t_global.redcon.ping()
-        t_global.con_pool_state = True
-    except redis.exceptions.ConnectionError as con_error:
-        print("%s" % (con_error))
-        print("ERROR: Redis connection could not be opened!")
-        return(-4)
+    while not t_global.con_pool_state:
+        try:
+            t_global.con_pool = redis.ConnectionPool(host = t_global.args.roadblock_redis_server,
+                                                     password = t_global.args.roadblock_redis_password,
+                                                     port = 6379,
+                                                     db = 0,
+                                                     health_check_interval = 0)
+            t_global.redcon = redis.Redis(connection_pool = t_global.con_pool)
+            t_global.redcon.ping()
+            t_global.con_pool_state = True
+        except redis.exceptions.ConnectionError as con_error:
+            print("%s" % (con_error))
+            print("ERROR: Redis connection could not be opened!")
+            time.sleep(3)
 
     t_global.pubsubcon = t_global.redcon.pubsub(ignore_subscribe_messages = True)
 
@@ -911,14 +921,6 @@ def main():
     # out -- ie. I am very late
     if key_check(t_global.args.roadblock_uuid + "__timedout"):
         do_timeout()
-
-    # set the default timeout alarm
-    signal.alarm(t_global.args.roadblock_timeout)
-    t_global.alarm_active = True
-    mytime = calendar.timegm(time.gmtime())
-    print("Current Time: %s" % (datetime.datetime.utcfromtimestamp(mytime).strftime("%Y-%m-%d at %H:%M:%S UTC")))
-    cluster_timeout = mytime + t_global.args.roadblock_timeout
-    print("Timeout: %s" % (datetime.datetime.utcfromtimestamp(cluster_timeout).strftime("%Y-%m-%d at %H:%M:%S UTC")))
 
     # check if the roadblock has been initialized yet
     if key_set(t_global.args.roadblock_uuid, mytime):
