@@ -8,30 +8,12 @@
 	{
 	    "name": "default",
 	    "requirements": [
-		"python36",
 		"python-redis",
 		"python-jsonschema"
-	    ]
-	},
-	{
-	    "name": "fedora31",
-	    "requirements": [
-		"python36",
-		"python3-redis",
-		"python3-jsonschema"
 	    ]
 	}
     ],
     "requirements": [
-	{
-	    "name": "python36",
-	    "type": "distro",
-	    "distro_info": {
-		"packages": [
-		    "python36"
-		]
-	    }
-	},
 	{
 	    "name": "python-redis",
 	    "type": "manual",
@@ -47,24 +29,6 @@
 	    "manual_info": {
 		"commands": [
 		    "pip3 install jsonschema"
-		]
-	    }
-	},
-	{
-	    "name": "python3-redis",
-	    "type": "distro",
-	    "distro_info": {
-		"packages": [
-		    "python3-redis"
-		]
-	    }
-	},
-	{
-	    "name": "python3-jsonschema",
-	    "type": "distro",
-	    "distro_info": {
-		"packages": [
-		    "python3-jsonschema"
 		]
 	    }
 	}
