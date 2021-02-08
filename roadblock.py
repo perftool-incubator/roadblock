@@ -708,7 +708,7 @@ def process_options ():
 
     parser.add_argument("--abort",
                         dest = "abort",
-                        help = "Use this option as a follower to send an abort message as part of this synchronization",
+                        help = "Use this option as a follower or leader to send an abort message as part of this synchronization",
                         action = "store_true")
 
     parser.add_argument("--debug",
