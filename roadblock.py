@@ -831,6 +831,8 @@ def main():
         if len(t_global.args.roadblock_followers) == 0:
             print("ERROR: There must be at least one follower")
             return(-1)
+        if t_global.args.abort:
+            t_global.leader_abort = True
 
         # build some hashes for easy tracking of follower status
         for follower in t_global.args.roadblock_followers:
@@ -909,13 +911,13 @@ def main():
     if t_global.args.roadblock_role == "follower":
         print("Follower ID: %s" % (t_global.args.roadblock_follower_id))
         print("Leader ID: %s" % (t_global.args.roadblock_leader_id))
-        if t_global.args.abort:
-            print("Abort: True")
-        else:
-            print("Abort: False")
     elif t_global.args.roadblock_role == "leader":
         print("Leader ID: %s" % (t_global.args.roadblock_leader_id))
         print("Followers: %s" % (t_global.args.roadblock_followers))
+    if t_global.args.abort:
+        print("Abort: True")
+    else:
+        print("Abort: False")
 
     # check if the roadblock was previously created and already timed
     # out -- ie. I am very late
