@@ -15,7 +15,7 @@ UPDATE=0
 ABORT_TEST=0
 TIMEOUT_TEST=0
 RANDOMIZE_INITIATOR=1
-#ROADBLOCK_DEBUG=" --debug "
+#ROADBLOCK_DEBUG=" --log-level debug "
 
 # goto the root of the repo
 REPO_DIR=$(dirname $0)/../
@@ -147,13 +147,13 @@ if pushd ${REPO_DIR} > /dev/null; then
 
     # get the roadblock leader container log
     echo -e "\nOutput from the roadblock leader:"
-    podman logs -t roadblock_leader
+    podman logs roadblock_leader
 
     # get the roadblock follower container(s) log
     echo -e "\nOutput from the roadblock follower(s):"
     for i in $(seq 1 ${NUM_FOLLOWERS}); do
 	echo -e "\nFollower ${i}:"
-	podman logs -t ${FOLLOWER_PREFIX}_${i}
+	podman logs ${FOLLOWER_PREFIX}_${i}
     done
 
     # get the redis monitor container log
