@@ -916,6 +916,7 @@ def main():
         t_global.log.info("Leader ID: %s" % (t_global.args.roadblock_leader_id))
     elif t_global.args.roadblock_role == "leader":
         t_global.log.info("Leader ID: %s" % (t_global.args.roadblock_leader_id))
+        t_global.log.info("Total followers: %d" % (len(t_global.args.roadblock_followers)))
         t_global.log.info("Followers: %s" % (t_global.args.roadblock_followers))
     if t_global.args.abort:
         t_global.log.info("Abort: True")
@@ -925,6 +926,7 @@ def main():
     # check if the roadblock was previously created and already timed
     # out -- ie. I am very late
     if key_check(t_global.args.roadblock_uuid + "__timedout"):
+        t_global.log.critical("Detected previous timeout for this roadblock")
         do_timeout()
 
     # check if the roadblock has been initialized yet
