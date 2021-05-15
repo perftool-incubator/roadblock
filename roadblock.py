@@ -99,10 +99,7 @@ def message_validate(message):
 
         checksum = hashlib.sha256(str(message_to_str(message["payload"])).encode("utf-8")).hexdigest()
 
-        if message["checksum"] == checksum:
-            return True
-        else:
-            return False
+        return bool(message["checksum"] == checksum)
     except:
         return False
 
