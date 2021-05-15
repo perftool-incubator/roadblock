@@ -1024,7 +1024,6 @@ def main():
                 t_global.log.debug("initiator stopping busB mirroring to busA")
     else:
         msg_list_index = -1
-        get_out = False
         while t_global.watch_busA:
             # retrieve unprocessed messages from busA
             msg_list = list_fetch(t_global.args.roadblock_uuid + "__busA", msg_list_index+1)
