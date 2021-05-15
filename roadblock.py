@@ -650,7 +650,7 @@ def backoff(attempts):
     return 0
 
 def process_options ():
-    parser = argparse.ArgumentParser(description="Roadblock provides multi entity (system, vm, container, etc.) synchronization.");
+    parser = argparse.ArgumentParser(description="Roadblock provides multi entity (system, vm, container, etc.) synchronization.")
 
     parser.add_argument("--uuid",
                         dest = "roadblock_uuid",
@@ -721,7 +721,7 @@ def process_options ():
                         default = "normal",
                         choices = [ "normal", "debug" ])
 
-    t_global.args = parser.parse_args();
+    t_global.args = parser.parse_args()
 
     if t_global.args.log_level == 'debug':
         logging.basicConfig(level = logging.DEBUG, format = t_global.log_debug_format, stream = sys.stdout)
