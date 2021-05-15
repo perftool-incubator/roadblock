@@ -484,7 +484,7 @@ def message_handle (message):
             else:
                 t_global.log.info("Sending 'follower-ready' message")
                 message_publish(message_build("leader", t_global.args.roadblock_leader_id, "follower-ready"))
-    elif msg_command == "follower-ready" or msg_command == "follower-ready-abort":
+    elif msg_command in ("follower-ready", "follower-ready-abort"):
         if t_global.args.roadblock_role == "leader":
             t_global.log.debug("leader got a 'follower-ready'")
 
@@ -513,7 +513,7 @@ def message_handle (message):
                     message_publish(message_build("all", "all", "all-go"))
     elif msg_command == "all-ready":
         t_global.log.info("Received 'all-ready' message")
-    elif msg_command == "all-go" or msg_command == "all-abort":
+    elif msg_command in ("all-go", "all-abort"):
         if t_global.args.roadblock_role == "follower":
             if msg_command == "all-go":
                 t_global.log.info("Received 'all-go' from leader")
