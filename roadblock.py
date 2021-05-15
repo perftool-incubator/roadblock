@@ -50,13 +50,13 @@ class t_global(object):
     log = None
 
 def message_to_str(message):
-    return(json.dumps(message, separators=(",", ":")))
+    return json.dumps(message, separators=(",", ":"))
 
 def message_from_str(message):
-    return(json.loads(message))
+    return json.loads(message)
 
 def message_build(recipient_type, recipient_id, command, value=None):
-    return(message_build_custom(t_global.args.roadblock_role, t_global.my_id, recipient_type, recipient_id, command, value))
+    return message_build_custom(t_global.args.roadblock_role, t_global.my_id, recipient_type, recipient_id, command, value)
 
 def message_build_custom(sender_type, sender_id, recipient_type, recipient_id, command, value=None):
     message = {
@@ -91,7 +91,7 @@ def message_build_custom(sender_type, sender_id, recipient_type, recipient_id, c
 
     message["checksum"] = hashlib.sha256(str(message_to_str(message["payload"])).encode("utf-8")).hexdigest()
 
-    return(message)
+    return message
 
 def message_validate(message):
     try:
@@ -100,39 +100,39 @@ def message_validate(message):
         checksum = hashlib.sha256(str(message_to_str(message["payload"])).encode("utf-8")).hexdigest()
 
         if message["checksum"] == checksum:
-            return(True)
+            return True
         else:
-            return(False)
+            return False
     except:
-        return(False)
+        return False
 
 def message_for_me(message):
     message["payload"]["recipient"]["timestamp"] = calendar.timegm(time.gmtime())
 
     if message["payload"]["sender"]["id"] == t_global.my_id and message["payload"]["sender"]["type"] == t_global.args.roadblock_role:
         # I'm the sender so ignore it
-        return(False)
+        return False
     elif message["payload"]["recipient"]["type"] == "all":
-        return(True)
+        return True
     elif message["payload"]["recipient"]["type"] == t_global.args.roadblock_role and message["payload"]["recipient"]["id"] == t_global.my_id:
-        return(True)
+        return True
     else:
-        return(False)
+        return False
 
 def message_get_command(message):
-    return(message["payload"]["message"]["command"])
+    return message["payload"]["message"]["command"]
 
 def message_get_value(message):
-    return(message["payload"]["message"]["value"])
+    return message["payload"]["message"]["value"]
 
 def message_get_sender(message):
-    return(message["payload"]["sender"]["id"])
+    return message["payload"]["sender"]["id"]
 
 def message_get_sender_type(message):
-    return(message["payload"]["sender"]["type"])
+    return message["payload"]["sender"]["type"]
 
 def message_get_uuid(message):
-    return(message["payload"]["uuid"])
+    return message["payload"]["uuid"]
 
 def define_usr_msg_schema():
     t_global.user_schema = {
@@ -411,7 +411,7 @@ def message_handle (message):
     msg_uuid = message_get_uuid(message)
     if msg_uuid in t_global.processed_messages:
         t_global.log.debug("I have already processed this message! [%s]" % (msg_uuid))
-        return(0)
+        return 0
     else:
         t_global.log.debug("adding uuid='%s' to the processed messages list" % (msg_uuid))
         t_global.processed_messages[msg_uuid] = True
@@ -440,7 +440,7 @@ def message_handle (message):
             signal.alarm(0)
             t_global.alarm_active = False
             t_global.log.critical("The timeout has already occurred")
-            return(-2)
+            return -2
     elif msg_command == "switch-buses":
         t_global.log.debug("switching busses")
 
@@ -553,7 +553,7 @@ def message_handle (message):
         t_global.initiator_id = message_get_sender(message)
         t_global.log.debug("Received an 'initiator-info' message with type='%s' and id='%s'" % (t_global.initiator_type, t_global.initiator_id))
 
-    return(0)
+    return 0
 
 def message_publish(message):
     message_str = message_to_str(message)
@@ -576,7 +576,7 @@ def message_publish(message):
         # for later dumping
         t_global.messages["sent"].append(message)
 
-    return(0)
+    return 0
 
 def key_delete(key):
     ret_val = 0
@@ -592,7 +592,7 @@ def key_delete(key):
 
             backoff(counter)
 
-    return(0)
+    return 0
 
 def key_set_once(key, value):
     ret_val = 0
@@ -607,7 +607,7 @@ def key_set_once(key, value):
 
             backoff(counter)
 
-    return(0)
+    return 0
 
 def key_set(key, value):
     # in this case we want to return the true/false behavior so the
@@ -632,7 +632,7 @@ def list_append(key, value):
 
             backoff(counter)
 
-    return(ret_val)
+    return ret_val
 
 def list_fetch(key, offset):
     # return the elements in the specified range (offset to end), this
@@ -650,7 +650,7 @@ def backoff(attempts):
         # back off more, spin even slower
         time.sleep(0.5)
 
-    return(0)
+    return 0
 
 def process_options ():
     parser = argparse.ArgumentParser(description="Roadblock provides multi entity (system, vm, container, etc.) synchronization.");
@@ -764,7 +764,7 @@ def cleanup():
     for msg in t_global.processed_messages:
         t_global.log.debug("\t%s" % (msg))
 
-    return(0)
+    return 0
 
 def get_followers_list(followers):
     followers_list = ""
@@ -772,7 +772,7 @@ def get_followers_list(followers):
     for follower in followers:
         followers_list += follower + " "
 
-    return(followers_list)
+    return followers_list
 
 def do_timeout():
     t_global.log.critical("Roadblock failed with timeout")
@@ -805,7 +805,7 @@ def sighandler(signum, frame):
     else:
         t_global.log.info("Signal handler called with signal", signum)
 
-    return(0)
+    return 0
 
 def connection_watchdog():
     while not t_global.con_watchdog_exit.is_set():
@@ -820,19 +820,19 @@ def connection_watchdog():
             t_global.log.error("%s" % (con_error))
             t_global.log.error("Redis connection failed")
 
-    return(0)
+    return 0
 
 def main():
     process_options()
 
     if len(t_global.args.roadblock_leader_id) == 0:
         t_global.log.critical("You must specify the leader's ID using --leader-id")
-        return(-1)
+        return -1
 
     if t_global.args.roadblock_role == "leader":
         if len(t_global.args.roadblock_followers) == 0:
             t_global.log.critical("There must be at least one follower")
-            return(-1)
+            return -1
         if t_global.args.abort:
             t_global.leader_abort = True
 
@@ -853,7 +853,7 @@ def main():
             t_global.message_log = open(t_global.args.message_log, "w")
         except IOError:
             t_global.log.critical("Could not open message log '%s' for writing!" % (t_global.args.message_log))
-            return(-1)
+            return -1
 
     define_msg_schema()
     define_usr_msg_schema()
@@ -866,14 +866,14 @@ def main():
             user_messages.close()
         except IOError:
             t_global.log.critical("Could not load the user messages '%s'!" % (t_global.args.user_messages))
-            return(-1)
+            return -1
 
         try:
             jsonschema.validate(instance=t_global.user_messages, schema=t_global.user_schema)
         except jsonschema.exceptions.SchemaError as e:
             t_global.log.critical(e)
             t_global.log.critical("Could not JSON validate the user messages!")
-            return(-1)
+            return -1
 
     # define a signal handler that will respond to SIGALRM when a
     # timeout even occurs
@@ -1017,7 +1017,7 @@ def main():
                         t_global.log.debug("initiator received a message for me! [%s]" % (msg_str))
                         ret_val = message_handle(msg)
                         if ret_val:
-                            return(ret_val)
+                            return ret_val
 
             if not t_global.mirror_busB:
                 t_global.log.debug("initiator stopping busB mirroring to busA")
@@ -1045,7 +1045,7 @@ def main():
                             t_global.log.debug("received a message which is for me!")
                             ret_val = message_handle(msg)
                             if ret_val:
-                                return(ret_val)
+                                return ret_val
 
             if t_global.watch_busA:
                 time.sleep(1)
@@ -1072,7 +1072,7 @@ def main():
                     t_global.log.debug("received a message for me!")
                     ret_val = message_handle(msg)
                     if ret_val:
-                        return(ret_val)
+                        return ret_val
 
     t_global.log.info("Cleaning up")
     cleanup()
@@ -1080,10 +1080,10 @@ def main():
     t_global.log.info("Exiting")
     if t_global.leader_abort == True or t_global.follower_abort == True:
         t_global.log.info("Roadblock Completed with an Abort")
-        return(-3)
+        return -3
     else:
         t_global.log.info("Roadblock Completed Successfully")
-        return(0)
+        return 0
 
 if __name__ == "__main__":
     exit(main())
