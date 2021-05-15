@@ -1133,7 +1133,7 @@ def main():
     cleanup()
 
     t_global.log.info("Exiting")
-    if t_global.leader_abort == True or t_global.follower_abort == True:
+    if t_global.leader_abort is True or t_global.follower_abort is True:
         t_global.log.info("Roadblock Completed with an Abort")
         return -3
     else:
