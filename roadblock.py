@@ -796,7 +796,7 @@ def do_timeout():
         elif len(t_global.followers["gone"]) != 0:
             t_global.log.critical("These followers never reach 'gone': %s" % (get_followers_list(t_global.followers["gone"])))
 
-    exit(-3)
+    sys.exit(-3)
 
 
 def sighandler(signum, frame):
@@ -1087,4 +1087,4 @@ def main():
         return 0
 
 if __name__ == "__main__":
-    exit(main())
+    sys.exit(main())
