@@ -685,7 +685,7 @@ def backoff(attempts):
 
     if attempts <= 10:
         # no back off, try really hard (spin)
-        attempts = attempts
+        pass
     elif attempts > 10 and attempts <= 50:
         # back off a bit, don't spin as quickly
         time.sleep(0.1)
