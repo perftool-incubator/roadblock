@@ -918,9 +918,8 @@ def main():
     if t_global.args.user_messages is not None:
         # load the user messages, if specified
         try:
-            user_messages = open(t_global.args.user_messages, "r")
-            t_global.user_messages = json.load(user_messages)
-            user_messages.close()
+            with open(t_global.args.user_messages, "r") as user_messages:
+                t_global.user_messages = json.load(user_messages)
         except IOError:
             t_global.log.critical("Could not load the user messages '%s'!" % (t_global.args.user_messages))
             return -1
