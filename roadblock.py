@@ -110,7 +110,7 @@ def message_validate(message):
         checksum = hashlib.sha256(str(message_to_str(message["payload"])).encode("utf-8")).hexdigest()
 
         return bool(message["checksum"] == checksum)
-    except:
+    except jsonschema.exceptions.SchemaError:
         return False
 
 def message_for_me(message):
