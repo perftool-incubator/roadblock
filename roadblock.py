@@ -6,15 +6,16 @@ import datetime
 import time
 import calendar
 import socket
-import redis
 import signal
 import hashlib
 import json
 import uuid
-import jsonschema
 import threading
 import logging
 import sys
+
+import redis
+import jsonschema
 
 # define some global variables
 class t_global(object):
