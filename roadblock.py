@@ -1,5 +1,7 @@
 #!/usr/bin/python3
 
+'''Roadblock is a synchronization and message passing utility which relies on redis for communication'''
+
 import argparse
 import datetime
 import time
