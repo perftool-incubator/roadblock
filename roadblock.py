@@ -17,7 +17,7 @@ import redis
 import jsonschema
 
 # define some global variables
-class t_global(object):
+class t_global():
     alarm_active = False
     args = None
     con_pool = None
