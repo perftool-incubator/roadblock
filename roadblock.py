@@ -18,6 +18,8 @@ import jsonschema
 
 # define some global variables
 class t_global():
+    '''Global variables'''
+
     alarm_active = False
     args = None
     con_pool = None
