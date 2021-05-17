@@ -930,8 +930,8 @@ def main():
 
         try:
             jsonschema.validate(instance=t_global.user_messages, schema=t_global.user_schema)
-        except jsonschema.exceptions.SchemaError as e:
-            t_global.log.critical(e)
+        except jsonschema.exceptions.SchemaError as exception:
+            t_global.log.critical(exception)
             t_global.log.critical("Could not JSON validate the user messages!")
             return -1
 
