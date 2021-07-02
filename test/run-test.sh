@@ -1,7 +1,7 @@
 #!/bin/bash
 
 REDIS_PASSWORD=flubber
-NUM_FOLLOWERS=50
+NUM_FOLLOWERS=5
 ROADBLOCK_TIMEOUT=120
 STAGE_1_DOCKER_FILE=client.test.stage1.dockerfile
 STAGE_1_UPDATE_DOCKER_FILE=client.test.stage1.update.dockerfile
@@ -15,7 +15,7 @@ UPDATE=0
 ABORT_TEST=0
 TIMEOUT_TEST=0
 RANDOMIZE_INITIATOR=1
-#ROADBLOCK_DEBUG=" --log-level debug "
+ROADBLOCK_DEBUG=" --log-level debug "
 
 # goto the root of the repo
 REPO_DIR=$(dirname $0)/../
@@ -80,6 +80,7 @@ if pushd ${REPO_DIR} > /dev/null; then
     fi
 
     REDIS_IP_ADDRESS=$(podman inspect --format "{{.NetworkSettings.IPAddress}}" redis_database)
+    echo "REDIS_IP_ADDRESS=${REDIS_IP_ADDRESS}"
 
     # start the redis monitor container
     echo -e "\nStarting the redis monitor container"
