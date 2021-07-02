@@ -29,6 +29,10 @@ jobs:
         pip install redis
         pip install jsonschema
 
+    - name: Build roadblock container
+      run: |
+        sudo ./test/build-container.sh
+
     - name: Run roadblock test
       run: |
-        ./test/run-test.sh
+        sudo ./test/run-test.sh
