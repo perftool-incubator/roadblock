@@ -13,6 +13,32 @@ RANDOMIZE_INITIATOR=1
 #ROADBLOCK_DEBUG=" --log-level debug "
 ROADBLOCK_IMAGE_NAME=roadblock-client-test
 
+options=$(getopt -o "f:" --long "followers:" -- "$@")
+if [ $? -eq 0 ]; then
+    eval set -- "${options}"
+else
+    echo "option error [$@]"
+    exit 1
+fi
+
+while true; do
+    case "${1}" in
+        -f|--followers)
+            shift
+            NUM_FOLLOWERS=${1}
+            if ! echo "${NUM_FOLLOWERS}" | grep -q '^[1-9][0-9]*$'; then
+                echo "invalid followers argument [${NUM_FOLLOWERS}]"
+                exit 1
+            fi
+            ;;
+        --)
+            shift
+            break
+            ;;
+    esac
+    shift
+done
+
 # goto the root of the repo
 REPO_DIR=$(dirname $0)/../
 if pushd ${REPO_DIR} > /dev/null; then
