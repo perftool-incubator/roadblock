@@ -104,7 +104,10 @@ if pushd ${REPO_DIR} > /dev/null; then
     if ! podman run --detach=true --interactive=true --tty=true --name=roadblock_leader --pod=${POD_NAME} localhost/${ROADBLOCK_IMAGE_NAME} -c \
 	 "sleep ${SLEEP_TIME}; /opt/roadblock/roadblock.py --uuid=${ROADBLOCK_UUID} --role=leader --redis-server=${REDIS_IP_ADDRESS} --redis-password=${REDIS_PASSWORD} ${FOLLOWERS} \
 	 --timeout=${ROADBLOCK_TIMEOUT} --leader-id=${LEADER_ID} --message-log=${MESSAGE_LOG} --user-messages=/opt/roadblock/user-messages.json ${ROADBLOCK_DEBUG}; \
-         echo -e \"\nRoadblock Message Log\"; cat ${MESSAGE_LOG}"; then
+         RC=\$?; \
+         echo -e \"\nRoadblock returned: \${RC}\"; \
+         echo -e \"\nRoadblock Message Log\"; cat ${MESSAGE_LOG}; \
+         exit \${RC}"; then
 	echo "ERROR: Could not start the roadblock leader container"
 	exit 5
     fi
