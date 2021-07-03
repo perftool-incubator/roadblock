@@ -9,11 +9,6 @@ jobs:
     steps:
     - uses: actions/checkout@v2
 
-    - name: Set up Python 3.8
-      uses: actions/setup-python@v1
-      with:
-        python-version: 3.8
-
     - name: Install test dependencies
       run: |
         . /etc/os-release
@@ -22,12 +17,6 @@ jobs:
         sudo apt-get -y update
         sudo apt-get -y install podman
         sudo apt-get -y install buildah
-
-    - name: Install roadblock dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install redis
-        pip install jsonschema
 
     - name: Build roadblock container
       run: |
