@@ -14,7 +14,7 @@ RANDOMIZE_INITIATOR=1
 #ROADBLOCK_DEBUG=" --log-level debug "
 ROADBLOCK_IMAGE_NAME=roadblock-client-test
 
-options=$(getopt -o "f:" --long "followers:" -- "$@")
+options=$(getopt -o "f:t" --long "followers:,timeout" -- "$@")
 if [ $? -eq 0 ]; then
     eval set -- "${options}"
 else
@@ -30,7 +30,14 @@ while true; do
             if ! echo "${NUM_FOLLOWERS}" | grep -q '^[1-9][0-9]*$'; then
                 echo "invalid followers argument [${NUM_FOLLOWERS}]"
                 exit 1
+            else
+                echo -e "\nSetting NUM_FOLLOWERS=${NUM_FOLLOWERS}"
             fi
+            ;;
+        -t|--timeout)
+            TIMEOUT_TEST=1
+            EXPECTED_LEADER_RC=-3
+            echo -e "\nEnabling roadblock timeout test"
             ;;
         --)
             shift
@@ -110,6 +117,7 @@ if pushd ${REPO_DIR} > /dev/null; then
 		ABORT=" --abort "
 	    fi
 	    if [ "${TIMEOUT_TEST}" == "1" ]; then
+                echo -e "\nNot starting roadblock follower ${i} container due to timeout test"
 		continue
 	    fi
 	fi

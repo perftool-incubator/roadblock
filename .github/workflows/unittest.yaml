@@ -37,6 +37,10 @@ jobs:
       run: |
         sudo ./test/run-test.sh --followers 5
 
+    - name: Run roadblock timeout test
+      run: |
+        sudo ./test/run-test.sh --followers 5 --timeout
+
     - name: Run large roadblock test
       run: |
         sudo ./test/run-test.sh --followers 50
