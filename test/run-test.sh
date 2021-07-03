@@ -7,6 +7,7 @@ NUM_FOLLOWERS=50
 ROADBLOCK_TIMEOUT=120
 MESSAGE_LOG="/tmp/roadblock.message.log"
 POD_NAME=roadblock-test
+EXPECTED_LEADER_RC=0
 ABORT_TEST=0
 TIMEOUT_TEST=0
 RANDOMIZE_INITIATOR=1
@@ -149,6 +150,10 @@ if pushd ${REPO_DIR} > /dev/null; then
     echo -e "\nOutput from the redis monitor:"
     podman logs -t redis_monitor
 
+    # get the roadblock leader's return code
+    leader_rc=$(podman wait roadblock_leader)
+    echo -e "\nRoadblock leader RC=${leader_rc}"
+
     # remove the roadblock leader container
     echo -e "\nRemoving the roadblock leader container"
     if ! podman rm roadblock_leader; then
@@ -189,4 +194,16 @@ if pushd ${REPO_DIR} > /dev/null; then
 	echo "ERROR: Failed to remove the roadblock pod"
 	exit 7
     fi
+
+    if [ "${leader_rc}" != "${EXPECTED_LEADER_RC}" ]; then
+        echo -e "\nReceived leader return code of ${leader_rc} when ${EXPECTED_LEADER_RC} was expected"
+        exit 12
+    else
+        echo -e "\nReceived expected leader return code [${leader_rc}] -> test successful!"
+    fi
+else
+    echo -e "\nFailed to pushd to ${REPO_DIR}"
+    exit 11
 fi
+
+exit 0
