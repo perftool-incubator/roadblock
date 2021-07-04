@@ -850,7 +850,7 @@ def do_timeout():
         elif len(t_global.followers["gone"]) != 0:
             t_global.log.critical("These followers never reach 'gone': %s" % (get_followers_list(t_global.followers["gone"])))
 
-    sys.exit(-3)
+    sys.exit(3)
 
 
 def sighandler(signum, frame):
@@ -888,12 +888,12 @@ def main():
 
     if len(t_global.args.roadblock_leader_id) == 0:
         t_global.log.critical("You must specify the leader's ID using --leader-id")
-        return -1
+        return 2
 
     if t_global.args.roadblock_role == "leader":
         if len(t_global.args.roadblock_followers) == 0:
             t_global.log.critical("There must be at least one follower")
-            return -1
+            return 2
         if t_global.args.abort:
             t_global.leader_abort = True
 
@@ -914,7 +914,7 @@ def main():
             t_global.message_log = open(t_global.args.message_log, "w")
         except IOError:
             t_global.log.critical("Could not open message log '%s' for writing!" % (t_global.args.message_log))
-            return -1
+            return 2
 
     define_msg_schema()
     define_usr_msg_schema()
@@ -926,14 +926,14 @@ def main():
                 t_global.user_messages = json.load(user_messages)
         except IOError:
             t_global.log.critical("Could not load the user messages '%s'!" % (t_global.args.user_messages))
-            return -1
+            return 2
 
         try:
             jsonschema.validate(instance=t_global.user_messages, schema=t_global.user_schema)
         except jsonschema.exceptions.SchemaError as exception:
             t_global.log.critical(exception)
             t_global.log.critical("Could not JSON validate the user messages!")
-            return -1
+            return 2
 
     # define a signal handler that will respond to SIGALRM when a
     # timeout even occurs
@@ -1139,7 +1139,7 @@ def main():
     t_global.log.info("Exiting")
     if t_global.leader_abort is True or t_global.follower_abort is True:
         t_global.log.info("Roadblock Completed with an Abort")
-        return -3
+        return 4
     else:
         t_global.log.info("Roadblock Completed Successfully")
         return 0

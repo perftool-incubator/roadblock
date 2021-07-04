@@ -36,7 +36,7 @@ while true; do
             ;;
         -t|--timeout)
             TIMEOUT_TEST=1
-            EXPECTED_LEADER_RC=-3
+            EXPECTED_LEADER_RC=3
             echo -e "\nEnabling roadblock timeout test"
             ;;
         --)
