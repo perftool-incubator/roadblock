@@ -14,7 +14,7 @@ RANDOMIZE_INITIATOR=1
 #ROADBLOCK_DEBUG=" --log-level debug "
 ROADBLOCK_IMAGE_NAME=roadblock-client-test
 
-options=$(getopt -o "f:t" --long "followers:,timeout" -- "$@")
+options=$(getopt -o "f:ta" --long "followers:,timeout,abort" -- "$@")
 if [ $? -eq 0 ]; then
     eval set -- "${options}"
 else
@@ -38,6 +38,11 @@ while true; do
             TIMEOUT_TEST=1
             EXPECTED_LEADER_RC=3
             echo -e "\nEnabling roadblock timeout test"
+            ;;
+        -a|--abort)
+            ABORT_TEST=1
+            EXPECTED_LEADER_RC=4
+            echo -e "\nEnabling roadblock abort test"
             ;;
         --)
             shift
