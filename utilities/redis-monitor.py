@@ -4,9 +4,14 @@
 
 import sys
 import argparse
+
+from dataclasses import dataclass
+
 import redis
 
-class t_global():
+
+@dataclass
+class global_vars:
     '''Global variables'''
 
     args=None
@@ -55,4 +60,5 @@ def main():
     return 0
 
 if __name__ == "__main__":
+    t_global = global_vars()
     sys.exit(main())

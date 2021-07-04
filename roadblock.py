@@ -15,11 +15,14 @@ import threading
 import logging
 import sys
 
+from dataclasses import dataclass
+
 import redis
 import jsonschema
 
 # define some global variables
-class t_global():
+@dataclass
+class global_vars:
     '''Global variables'''
 
     alarm_active = False
@@ -1145,4 +1148,5 @@ def main():
         return 0
 
 if __name__ == "__main__":
+    t_global = global_vars()
     sys.exit(main())
