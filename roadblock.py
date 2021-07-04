@@ -48,7 +48,7 @@ class t_global():
     messages = { "sent": [],
                  "received": [] }
     message_log = None
-    user_messages = None
+    user_messages = []
     log_debug_format =  '[%(module)s %(funcName)s:%(lineno)d]\n[%(asctime)s][%(levelname) 8s] %(message)s'
     log_normal_format = '[%(asctime)s][%(levelname) 8s] %(message)s'
     log = None
