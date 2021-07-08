@@ -1,6 +1,10 @@
 name: unittest
 
-on: [push]
+on:
+  push:
+  pull_request:
+    branches: [ master ]
+  workflow_dispatch:
 
 jobs:
   roadblock-unittests:
