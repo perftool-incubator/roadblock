@@ -8,7 +8,6 @@
 	{
 	    "name": "default",
 	    "requirements": [
-		"python39",
 		"python-redis",
 		"python-jsonschema"
 	    ]
@@ -16,20 +15,12 @@
     ],
     "requirements": [
 	{
-	    "name": "python39",
-	    "type": "distro",
-	    "distro_info": {
-		"packages": [
-		    "python39"
-		]
-	    }
-	},
-	{
 	    "name": "python-redis",
 	    "type": "manual",
 	    "manual_info": {
 		"commands": [
-		    "pip3.9 install redis"
+		    "if command -v pip3.9; then pip3.9 install redis; else echo 'pip3.9 not found'; fi",
+		    "if command -v pip3; then pip3 install redis; else echo 'pip3 not found'; fi"
 		]
 	    }
 	},
@@ -38,7 +29,8 @@
 	    "type": "manual",
 	    "manual_info": {
 		"commands": [
-		    "pip3.9 install jsonschema"
+		    "if command -v pip3.9; then pip3.9 install jsonschema; else echo 'pip3.9 not found'; fi",
+		    "if command -v pip3; then pip3 install jsonschema; else echo 'pip3 not found'; fi"
 		]
 	    }
 	}
