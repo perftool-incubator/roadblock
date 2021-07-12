@@ -1,0 +1,42 @@
+name: roadblock-ci
+
+on:
+  pull_request:
+    branches: [ master ]
+  workflow_dispatch:
+
+jobs:
+  roadblock-ci:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: Install test dependencies
+      run: |
+        . /etc/os-release
+        echo "deb https://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/stable/xUbuntu_${VERSION_ID}/ /" | sudo tee /etc/apt/sources.list.d/devel:kubic:libcontainers:stable.list
+        curl -L "https://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/stable/xUbuntu_${VERSION_ID}/Release.key" | sudo apt-key add -
+        sudo apt-get -y update
+        sudo apt-get -y install podman
+        sudo apt-get -y install buildah
+
+    - name: Build roadblock container
+      run: |
+        sudo ./test/build-container.sh
+
+    - name: Run small roadblock test
+      run: |
+        sudo ./test/run-test.sh --followers 5
+
+    - name: Run roadblock timeout test
+      run: |
+        sudo ./test/run-test.sh --followers 5 --timeout
+
+    - name: Run roadblock abort test
+      run: |
+        sudo ./test/run-test.sh --followers 5 --abort
+
+    - name: Run large roadblock test
+      run: |
+        sudo ./test/run-test.sh --followers 50

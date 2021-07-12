@@ -1,18 +1,25 @@
 #!/usr/bin/python3
 
-import sys, getopt
+'''Utility to monitor redis activity'''
+
+import sys
 import argparse
-import json
-import string
-import datetime
-import math
+
+from dataclasses import dataclass
+
 import redis
 
-class t_global(object):
-    args=None;
+
+@dataclass
+class global_vars:
+    '''Global variables'''
+
+    args=None
 
 def process_options ():
-    parser = argparse.ArgumentParser(description="Monitor commands being processed by a redis server.");
+    '''Define the CLI argument parsing options'''
+
+    parser = argparse.ArgumentParser(description="Monitor commands being processed by a redis server.")
 
     parser.add_argument('--redis-server',
                         dest = 'redis_server',
@@ -26,9 +33,11 @@ def process_options ():
                         default = 'foobar',
                         type = str)
 
-    t_global.args = parser.parse_args();
+    t_global.args = parser.parse_args()
 
 def main():
+    '''Main control block'''
+
     process_options()
 
     try:
@@ -40,13 +49,16 @@ def main():
     except redis.exceptions.ConnectionError as con_error:
         print("%s" % (con_error))
         print("ERROR: Redis connection could not be opened!")
-        return(-1)
+        return -1
 
-    with redcon.monitor() as m:
-        for command in m.listen():
+    with redcon.monitor() as mon:
+        for command in mon.listen():
             print(command)
 
     redcon.close()
-    
+
+    return 0
+
 if __name__ == "__main__":
-    exit(main())
+    t_global = global_vars()
+    sys.exit(main())

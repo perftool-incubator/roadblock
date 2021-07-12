@@ -1,23 +1,30 @@
 #!/usr/bin/python3
 
+'''Roadblock is a synchronization and message passing utility which relies on redis for communication'''
+
 import argparse
-import string
 import datetime
 import time
 import calendar
 import socket
-import redis
 import signal
 import hashlib
 import json
 import uuid
-import jsonschema
 import threading
 import logging
 import sys
 
+from dataclasses import dataclass
+
+import redis
+import jsonschema
+
 # define some global variables
-class t_global(object):
+@dataclass
+class global_vars:
+    '''Global variables'''
+
     alarm_active = False
     args = None
     con_pool = None
@@ -44,21 +51,29 @@ class t_global(object):
     messages = { "sent": [],
                  "received": [] }
     message_log = None
-    user_messages = None
+    user_messages = []
     log_debug_format =  '[%(module)s %(funcName)s:%(lineno)d]\n[%(asctime)s][%(levelname) 8s] %(message)s'
     log_normal_format = '[%(asctime)s][%(levelname) 8s] %(message)s'
     log = None
 
 def message_to_str(message):
-    return(json.dumps(message, separators=(",", ":")))
+    '''Converts a message into a JSON string'''
+
+    return json.dumps(message, separators=(",", ":"))
 
 def message_from_str(message):
-    return(json.loads(message))
+    '''Convert a JSON string into a message'''
+
+    return json.loads(message)
 
 def message_build(recipient_type, recipient_id, command, value=None):
-    return(message_build_custom(t_global.args.roadblock_role, t_global.my_id, recipient_type, recipient_id, command, value))
+    '''Create a generic message using the ID and role of the sender'''
+
+    return message_build_custom(t_global.args.roadblock_role, t_global.my_id, recipient_type, recipient_id, command, value)
 
 def message_build_custom(sender_type, sender_id, recipient_type, recipient_id, command, value=None):
+    '''Create a custom message with any user specified values'''
+
     message = {
         "payload": {
             "uuid": str(uuid.uuid4()),
@@ -91,50 +106,63 @@ def message_build_custom(sender_type, sender_id, recipient_type, recipient_id, c
 
     message["checksum"] = hashlib.sha256(str(message_to_str(message["payload"])).encode("utf-8")).hexdigest()
 
-    return(message)
+    return message
 
 def message_validate(message):
+    '''Validate that a received message matches the message schema and that it is not corrupted'''
+
     try:
         jsonschema.validate(instance=message, schema=t_global.schema)
 
         checksum = hashlib.sha256(str(message_to_str(message["payload"])).encode("utf-8")).hexdigest()
 
-        if message["checksum"] == checksum:
-            return(True)
-        else:
-            return(False)
-    except:
-        return(False)
+        return bool(message["checksum"] == checksum)
+    except jsonschema.exceptions.SchemaError:
+        return False
 
 def message_for_me(message):
+    '''Determine if a received message was intended for me'''
+
     message["payload"]["recipient"]["timestamp"] = calendar.timegm(time.gmtime())
 
     if message["payload"]["sender"]["id"] == t_global.my_id and message["payload"]["sender"]["type"] == t_global.args.roadblock_role:
         # I'm the sender so ignore it
-        return(False)
+        return False
     elif message["payload"]["recipient"]["type"] == "all":
-        return(True)
+        return True
     elif message["payload"]["recipient"]["type"] == t_global.args.roadblock_role and message["payload"]["recipient"]["id"] == t_global.my_id:
-        return(True)
+        return True
     else:
-        return(False)
+        return False
 
 def message_get_command(message):
-    return(message["payload"]["message"]["command"])
+    '''Extract the command from a message'''
+
+    return message["payload"]["message"]["command"]
 
 def message_get_value(message):
-    return(message["payload"]["message"]["value"])
+    '''Extract a value from the a message'''
+
+    return message["payload"]["message"]["value"]
 
 def message_get_sender(message):
-    return(message["payload"]["sender"]["id"])
+    '''Extract the sender ID from a message'''
+
+    return message["payload"]["sender"]["id"]
 
 def message_get_sender_type(message):
-    return(message["payload"]["sender"]["type"])
+    '''Extract the sender type from a message'''
+
+    return message["payload"]["sender"]["type"]
 
 def message_get_uuid(message):
-    return(message["payload"]["uuid"])
+    '''Extract a message's UUID'''
+
+    return message["payload"]["uuid"]
 
 def define_usr_msg_schema():
+    '''Define the schema used to validate user messages'''
+
     t_global.user_schema = {
         "type": "array",
         "minItems": 1,
@@ -203,6 +231,8 @@ def define_usr_msg_schema():
     }
 
 def define_msg_schema():
+    '''Define the schema used to validate roadblock protocol messages'''
+
     t_global.schema = {
         "type": "object",
         "properties": {
@@ -394,6 +424,8 @@ def define_msg_schema():
     }
 
 def send_user_messages():
+    '''Send user defined messages'''
+
     if t_global.user_messages is not None:
         t_global.log.info("Sending user requested messages")
         user_msg_counter = 1
@@ -408,10 +440,12 @@ def send_user_messages():
             user_msg_counter += 1
 
 def message_handle (message):
+    '''Roadblock protocol message handler'''
+
     msg_uuid = message_get_uuid(message)
     if msg_uuid in t_global.processed_messages:
         t_global.log.debug("I have already processed this message! [%s]" % (msg_uuid))
-        return(0)
+        return 0
     else:
         t_global.log.debug("adding uuid='%s' to the processed messages list" % (msg_uuid))
         t_global.processed_messages[msg_uuid] = True
@@ -440,7 +474,7 @@ def message_handle (message):
             signal.alarm(0)
             t_global.alarm_active = False
             t_global.log.critical("The timeout has already occurred")
-            return(-2)
+            return -2
     elif msg_command == "switch-buses":
         t_global.log.debug("switching busses")
 
@@ -483,7 +517,7 @@ def message_handle (message):
             else:
                 t_global.log.info("Sending 'follower-ready' message")
                 message_publish(message_build("leader", t_global.args.roadblock_leader_id, "follower-ready"))
-    elif msg_command == "follower-ready" or msg_command == "follower-ready-abort":
+    elif msg_command in ("follower-ready", "follower-ready-abort"):
         if t_global.args.roadblock_role == "leader":
             t_global.log.debug("leader got a 'follower-ready'")
 
@@ -512,7 +546,7 @@ def message_handle (message):
                     message_publish(message_build("all", "all", "all-go"))
     elif msg_command == "all-ready":
         t_global.log.info("Received 'all-ready' message")
-    elif msg_command == "all-go" or msg_command == "all-abort":
+    elif msg_command in ("all-go", "all-abort"):
         if t_global.args.roadblock_role == "follower":
             if msg_command == "all-go":
                 t_global.log.info("Received 'all-go' from leader")
@@ -553,9 +587,11 @@ def message_handle (message):
         t_global.initiator_id = message_get_sender(message)
         t_global.log.debug("Received an 'initiator-info' message with type='%s' and id='%s'" % (t_global.initiator_type, t_global.initiator_id))
 
-    return(0)
+    return 0
 
 def message_publish(message):
+    '''Publish messages for subscribers to receive'''
+
     message_str = message_to_str(message)
 
     ret_val = 0
@@ -576,9 +612,11 @@ def message_publish(message):
         # for later dumping
         t_global.messages["sent"].append(message)
 
-    return(0)
+    return 0
 
 def key_delete(key):
+    '''Delete a key from redis'''
+
     ret_val = 0
     counter = 0
     while ret_val == 0:
@@ -592,9 +630,11 @@ def key_delete(key):
 
             backoff(counter)
 
-    return(0)
+    return 0
 
 def key_set_once(key, value):
+    '''Set a key once in redis'''
+
     ret_val = 0
     counter = 0
     while ret_val == 0:
@@ -607,18 +647,24 @@ def key_set_once(key, value):
 
             backoff(counter)
 
-    return(0)
+    return 0
 
 def key_set(key, value):
+    '''Set a key in redis if it does not already exist'''
+
     # in this case we want to return the true/false behavior so the
     # caller knows if they set the key or it already existed
     return t_global.redcon.msetnx( { key: value } )
 
 def key_check(key):
+    '''Check if a key already exists in redis'''
+
     # inform the caller whether the key already existed or not
     return t_global.redcon.exists(key)
 
 def list_append(key, value):
+    '''Append a value to a list in redis'''
+
     ret_val = 0
     counter = 0
     while ret_val == 0:
@@ -632,28 +678,34 @@ def list_append(key, value):
 
             backoff(counter)
 
-    return(ret_val)
+    return ret_val
 
 def list_fetch(key, offset):
+    '''Fetch a list from redis'''
+
     # return the elements in the specified range (offset to end), this
     # could be empty so we can't really verify it
     return t_global.redcon.lrange(key, offset, -1)
 
 def backoff(attempts):
+    '''Control the rate of retries depending on how many have been attempted'''
+
     if attempts <= 10:
         # no back off, try really hard (spin)
-        attempts = attempts
-    elif attempts > 10 and attempts <= 50:
+        pass
+    elif 10 < attempts <= 50:
         # back off a bit, don't spin as quickly
         time.sleep(0.1)
     else:
         # back off more, spin even slower
         time.sleep(0.5)
 
-    return(0)
+    return 0
 
 def process_options ():
-    parser = argparse.ArgumentParser(description="Roadblock provides multi entity (system, vm, container, etc.) synchronization.");
+    '''Define the CLI argument parsing options'''
+
+    parser = argparse.ArgumentParser(description="Roadblock provides multi entity (system, vm, container, etc.) synchronization.")
 
     parser.add_argument("--uuid",
                         dest = "roadblock_uuid",
@@ -724,7 +776,7 @@ def process_options ():
                         default = "normal",
                         choices = [ "normal", "debug" ])
 
-    t_global.args = parser.parse_args();
+    t_global.args = parser.parse_args()
 
     if t_global.args.log_level == 'debug':
         logging.basicConfig(level = logging.DEBUG, format = t_global.log_debug_format, stream = sys.stdout)
@@ -735,6 +787,8 @@ def process_options ():
 
 
 def cleanup():
+    '''Cleanup the roadblock before exiting'''
+
     if t_global.alarm_active:
         t_global.log.info("Disabling timeout alarm")
         signal.alarm(0)
@@ -764,17 +818,21 @@ def cleanup():
     for msg in t_global.processed_messages:
         t_global.log.debug("\t%s" % (msg))
 
-    return(0)
+    return 0
 
 def get_followers_list(followers):
+    '''Generate a list of the followers'''
+
     followers_list = ""
 
     for follower in followers:
         followers_list += follower + " "
 
-    return(followers_list)
+    return followers_list
 
 def do_timeout():
+    '''Handle a roadblock timeout event'''
+
     t_global.log.critical("Roadblock failed with timeout")
 
     if t_global.con_pool_state and t_global.initiator:
@@ -795,19 +853,23 @@ def do_timeout():
         elif len(t_global.followers["gone"]) != 0:
             t_global.log.critical("These followers never reach 'gone': %s" % (get_followers_list(t_global.followers["gone"])))
 
-    exit(-3)
+    sys.exit(3)
 
 
 def sighandler(signum, frame):
+    '''Handle signals delivered to the process'''
+
     if signum == 14: # SIGALRM
         t_global.alarm_active = False
         do_timeout()
     else:
         t_global.log.info("Signal handler called with signal", signum)
 
-    return(0)
+    return 0
 
 def connection_watchdog():
+    '''Check if the redis connection is still open'''
+
     while not t_global.con_watchdog_exit.is_set():
         time.sleep(1)
         try:
@@ -820,19 +882,21 @@ def connection_watchdog():
             t_global.log.error("%s" % (con_error))
             t_global.log.error("Redis connection failed")
 
-    return(0)
+    return 0
 
 def main():
+    '''Main control block'''
+
     process_options()
 
     if len(t_global.args.roadblock_leader_id) == 0:
         t_global.log.critical("You must specify the leader's ID using --leader-id")
-        return(-1)
+        return 2
 
     if t_global.args.roadblock_role == "leader":
         if len(t_global.args.roadblock_followers) == 0:
             t_global.log.critical("There must be at least one follower")
-            return(-1)
+            return 2
         if t_global.args.abort:
             t_global.leader_abort = True
 
@@ -853,7 +917,7 @@ def main():
             t_global.message_log = open(t_global.args.message_log, "w")
         except IOError:
             t_global.log.critical("Could not open message log '%s' for writing!" % (t_global.args.message_log))
-            return(-1)
+            return 2
 
     define_msg_schema()
     define_usr_msg_schema()
@@ -861,19 +925,18 @@ def main():
     if t_global.args.user_messages is not None:
         # load the user messages, if specified
         try:
-            user_messages = open(t_global.args.user_messages, "r")
-            t_global.user_messages = json.load(user_messages)
-            user_messages.close()
+            with open(t_global.args.user_messages, "r") as user_messages:
+                t_global.user_messages = json.load(user_messages)
         except IOError:
             t_global.log.critical("Could not load the user messages '%s'!" % (t_global.args.user_messages))
-            return(-1)
+            return 2
 
         try:
             jsonschema.validate(instance=t_global.user_messages, schema=t_global.user_schema)
-        except jsonschema.exceptions.SchemaError as e:
-            t_global.log.critical(e)
+        except jsonschema.exceptions.SchemaError as exception:
+            t_global.log.critical(exception)
             t_global.log.critical("Could not JSON validate the user messages!")
-            return(-1)
+            return 2
 
     # define a signal handler that will respond to SIGALRM when a
     # timeout even occurs
@@ -1017,13 +1080,12 @@ def main():
                         t_global.log.debug("initiator received a message for me! [%s]" % (msg_str))
                         ret_val = message_handle(msg)
                         if ret_val:
-                            return(ret_val)
+                            return ret_val
 
             if not t_global.mirror_busB:
                 t_global.log.debug("initiator stopping busB mirroring to busA")
     else:
         msg_list_index = -1
-        get_out = False
         while t_global.watch_busA:
             # retrieve unprocessed messages from busA
             msg_list = list_fetch(t_global.args.roadblock_uuid + "__busA", msg_list_index+1)
@@ -1045,7 +1107,7 @@ def main():
                             t_global.log.debug("received a message which is for me!")
                             ret_val = message_handle(msg)
                             if ret_val:
-                                return(ret_val)
+                                return ret_val
 
             if t_global.watch_busA:
                 time.sleep(1)
@@ -1072,18 +1134,19 @@ def main():
                     t_global.log.debug("received a message for me!")
                     ret_val = message_handle(msg)
                     if ret_val:
-                        return(ret_val)
+                        return ret_val
 
     t_global.log.info("Cleaning up")
     cleanup()
 
     t_global.log.info("Exiting")
-    if t_global.leader_abort == True or t_global.follower_abort == True:
+    if t_global.leader_abort is True or t_global.follower_abort is True:
         t_global.log.info("Roadblock Completed with an Abort")
-        return(-3)
+        return 4
     else:
         t_global.log.info("Roadblock Completed Successfully")
-        return(0)
+        return 0
 
 if __name__ == "__main__":
-    exit(main())
+    t_global = global_vars()
+    sys.exit(main())

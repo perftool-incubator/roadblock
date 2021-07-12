@@ -1,69 +1,70 @@
 #!/bin/bash
+# -*- mode: sh; indent-tabs-mode: nil; sh-basic-offset: 4 -*-
+# vim: autoindent tabstop=4 shiftwidth=4 expandtab softtabstop=4 filetype=bash
 
 REDIS_PASSWORD=flubber
 NUM_FOLLOWERS=50
 ROADBLOCK_TIMEOUT=120
-STAGE_1_DOCKER_FILE=client.test.stage1.dockerfile
-STAGE_1_UPDATE_DOCKER_FILE=client.test.stage1.update.dockerfile
-STAGE_2_DOCKER_FILE=client.test.stage2.dockerfile
-STAGE_1_IMAGE_NAME=fedora-redis-python-client
-STAGE_2_IMAGE_NAME=roadblock-client-test
 MESSAGE_LOG="/tmp/roadblock.message.log"
 POD_NAME=roadblock-test
-BUILD=1
-UPDATE=0
+EXPECTED_LEADER_RC=0
 ABORT_TEST=0
 TIMEOUT_TEST=0
 RANDOMIZE_INITIATOR=1
 #ROADBLOCK_DEBUG=" --log-level debug "
+ROADBLOCK_IMAGE_NAME=roadblock-client-test
+
+options=$(getopt -o "f:ta" --long "followers:,timeout,abort" -- "$@")
+if [ $? -eq 0 ]; then
+    eval set -- "${options}"
+else
+    echo "option error [$@]"
+    exit 1
+fi
+
+while true; do
+    case "${1}" in
+        -f|--followers)
+            shift
+            NUM_FOLLOWERS=${1}
+            if ! echo "${NUM_FOLLOWERS}" | grep -q '^[1-9][0-9]*$'; then
+                echo "invalid followers argument [${NUM_FOLLOWERS}]"
+                exit 1
+            else
+                echo -e "\nSetting NUM_FOLLOWERS=${NUM_FOLLOWERS}"
+            fi
+            ;;
+        -t|--timeout)
+            TIMEOUT_TEST=1
+            EXPECTED_LEADER_RC=3
+            echo -e "\nEnabling roadblock timeout test"
+            ;;
+        -a|--abort)
+            ABORT_TEST=1
+            EXPECTED_LEADER_RC=4
+            echo -e "\nEnabling roadblock abort test"
+            ;;
+        --)
+            shift
+            break
+            ;;
+    esac
+    shift
+done
 
 # goto the root of the repo
 REPO_DIR=$(dirname $0)/../
 if pushd ${REPO_DIR} > /dev/null; then
+    echo -e "\nStarting the roadblock test"
 
-    if [ "${BUILD}" == 1 ]; then
-	echo -e "\nBuilding the container infrastructure"
-
-	if [ -z "$(podman images --quiet localhost/${STAGE_1_IMAGE_NAME})" ] ; then
-	    echo -e "\nBuilding the stage 1 container image"
-	    if ! buildah bud -t ${STAGE_1_IMAGE_NAME} -f utilities/containers/${STAGE_1_DOCKER_FILE} ${REPO_DIR}; then
-		echo "ERROR: Could not build stage 1 container image"
-		exit 1
-	    fi
-	else
-	    if [ "${UPDATE}" == 1 ]; then
-		echo -e "\nUpdating the stage 1 container image"
-		if ! buildah bud -t ${STAGE_1_IMAGE_NAME} -f utilities/containers/${STAGE_1_UPDATE_DOCKER_FILE} ${REPO_DIR}; then
-		    echo "ERROR: Could not update stage 1 container image"
-		    exit 2
-		fi
-	    fi
-	fi
-
-	if [ -n "$(podman images --quiet localhost/${STAGE_2_IMAGE_NAME})" ]; then
-	    echo -e "\nRemoving stale stage 2 container image"
-	    if ! buildah rmi localhost/${STAGE_2_IMAGE_NAME}; then
-		echo "ERROR: Could not remove stale stage 2 container image"
-		exit 9
-	    fi
-	fi
-
-	echo -e "\nBuilding the stage 2 container image"
-	if ! buildah bud -t ${STAGE_2_IMAGE_NAME} -f utilities/containers/${STAGE_2_DOCKER_FILE} ${REPO_DIR}; then
-	    echo "ERROR: Could not build stage 2 container image"
-	    exit 8
-	fi
-
-	# get the redis database container from the registry
-	if ! podman pull docker.io/centos/redis-5-centos7; then
-	    echo "ERROR: Could not pull the redis database container"
-	    exit 3
-	fi
-    else
-	echo -e "\nSkipping container infrastructure build"
+    # get the redis database container from the registry
+    if ! podman pull docker.io/centos/redis-5-centos7; then
+        echo "ERROR: Could not pull the redis database container"
+        exit 3
     fi
 
-    echo -e "\nStarting the roadblock test"
+    echo -e "\nAvailable container images"
+    buildah images
 
     # create a pod to place all the containers into
     echo -e "\nCreating roadblock pod"
@@ -80,10 +81,11 @@ if pushd ${REPO_DIR} > /dev/null; then
     fi
 
     REDIS_IP_ADDRESS=$(podman inspect --format "{{.NetworkSettings.IPAddress}}" redis_database)
+    echo "REDIS_IP_ADDRESS=${REDIS_IP_ADDRESS}"
 
     # start the redis monitor container
     echo -e "\nStarting the redis monitor container"
-    if ! podman run --detach=true --interactive=true --tty=true --name=redis_monitor --pod=${POD_NAME} localhost/${STAGE_2_IMAGE_NAME} -c \
+    if ! podman run --detach=true --interactive=true --tty=true --name=redis_monitor --pod=${POD_NAME} localhost/${ROADBLOCK_IMAGE_NAME} -c \
 	"/opt/roadblock/redis-monitor.py --redis-server=${REDIS_IP_ADDRESS} --redis-password=${REDIS_PASSWORD}"; then
 	echo "ERROR: Could not start the redis monitor container"
 	exit 10
@@ -104,10 +106,13 @@ if pushd ${REPO_DIR} > /dev/null; then
     if [ "${RANDOMIZE_INITIATOR}" == "1" ]; then
 	SLEEP_TIME=$((RANDOM%20))
     fi
-    if ! podman run --detach=true --interactive=true --tty=true --name=roadblock_leader --pod=${POD_NAME} localhost/${STAGE_2_IMAGE_NAME} -c \
+    if ! podman run --detach=true --interactive=true --tty=true --name=roadblock_leader --pod=${POD_NAME} localhost/${ROADBLOCK_IMAGE_NAME} -c \
 	 "sleep ${SLEEP_TIME}; /opt/roadblock/roadblock.py --uuid=${ROADBLOCK_UUID} --role=leader --redis-server=${REDIS_IP_ADDRESS} --redis-password=${REDIS_PASSWORD} ${FOLLOWERS} \
 	 --timeout=${ROADBLOCK_TIMEOUT} --leader-id=${LEADER_ID} --message-log=${MESSAGE_LOG} --user-messages=/opt/roadblock/user-messages.json ${ROADBLOCK_DEBUG}; \
-         echo -e \"\nRoadblock Message Log\"; cat ${MESSAGE_LOG}"; then
+         RC=\$?; \
+         echo -e \"\nRoadblock returned: \${RC}\"; \
+         echo -e \"\nRoadblock Message Log\"; cat ${MESSAGE_LOG}; \
+         exit \${RC}"; then
 	echo "ERROR: Could not start the roadblock leader container"
 	exit 5
     fi
@@ -120,12 +125,13 @@ if pushd ${REPO_DIR} > /dev/null; then
 		ABORT=" --abort "
 	    fi
 	    if [ "${TIMEOUT_TEST}" == "1" ]; then
+                echo -e "\nNot starting roadblock follower ${i} container due to timeout test"
 		continue
 	    fi
 	fi
 	SLEEP_TIME=$((RANDOM%20))
 	echo -e "\nStarting the roadblock follower ${i} container with a sleep ${SLEEP_TIME}"
-	if ! podman run --detach --interactive=true --tty=true --name=${FOLLOWER_PREFIX}_${i} --pod=${POD_NAME} localhost/${STAGE_2_IMAGE_NAME} -c \
+	if ! podman run --detach --interactive=true --tty=true --name=${FOLLOWER_PREFIX}_${i} --pod=${POD_NAME} localhost/${ROADBLOCK_IMAGE_NAME} -c \
 	     "sleep ${SLEEP_TIME}; /opt/roadblock/roadblock.py --uuid=${ROADBLOCK_UUID} --role=follower --follower-id=${FOLLOWER_PREFIX}_${i} --redis-server=${REDIS_IP_ADDRESS} \
 	     --redis-password=${REDIS_PASSWORD} --timeout=${ROADBLOCK_TIMEOUT} --leader-id=${LEADER_ID} --message-log=${MESSAGE_LOG} --user-messages=/opt/roadblock/user-messages.json ${ROADBLOCK_DEBUG} ${ABORT}; \
              echo -e \"\nRoadblock Message Log\"; cat ${MESSAGE_LOG}"; then
@@ -159,6 +165,10 @@ if pushd ${REPO_DIR} > /dev/null; then
     # get the redis monitor container log
     echo -e "\nOutput from the redis monitor:"
     podman logs -t redis_monitor
+
+    # get the roadblock leader's return code
+    leader_rc=$(podman wait roadblock_leader)
+    echo -e "\nRoadblock leader RC=${leader_rc}"
 
     # remove the roadblock leader container
     echo -e "\nRemoving the roadblock leader container"
@@ -200,4 +210,16 @@ if pushd ${REPO_DIR} > /dev/null; then
 	echo "ERROR: Failed to remove the roadblock pod"
 	exit 7
     fi
+
+    if [ "${leader_rc}" != "${EXPECTED_LEADER_RC}" ]; then
+        echo -e "\nReceived leader return code of ${leader_rc} when ${EXPECTED_LEADER_RC} was expected"
+        exit 12
+    else
+        echo -e "\nReceived expected leader return code [${leader_rc}] -> test successful!"
+    fi
+else
+    echo -e "\nFailed to pushd to ${REPO_DIR}"
+    exit 11
 fi
+
+exit 0
