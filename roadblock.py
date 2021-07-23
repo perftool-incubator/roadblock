@@ -20,6 +20,11 @@ from dataclasses import dataclass
 import redis
 import jsonschema
 
+RC_SUCCESS=0
+RC_INVALID_INPUT=2
+RC_TIMEOUT=3
+RC_ABORT=4
+
 # define some global variables
 @dataclass
 class global_vars:
@@ -445,7 +450,7 @@ def message_handle (message):
     msg_uuid = message_get_uuid(message)
     if msg_uuid in t_global.processed_messages:
         t_global.log.debug("I have already processed this message! [%s]" % (msg_uuid))
-        return 0
+        return RC_SUCCESS
     else:
         t_global.log.debug("adding uuid='%s' to the processed messages list" % (msg_uuid))
         t_global.processed_messages[msg_uuid] = True
@@ -474,7 +479,7 @@ def message_handle (message):
             signal.alarm(0)
             t_global.alarm_active = False
             t_global.log.critical("The timeout has already occurred")
-            return 2
+            return RC_TIMEOUT
     elif msg_command == "switch-buses":
         t_global.log.debug("switching busses")
 
@@ -587,7 +592,7 @@ def message_handle (message):
         t_global.initiator_id = message_get_sender(message)
         t_global.log.debug("Received an 'initiator-info' message with type='%s' and id='%s'" % (t_global.initiator_type, t_global.initiator_id))
 
-    return 0
+    return RC_SUCCESS
 
 def message_publish(message):
     '''Publish messages for subscribers to receive'''
@@ -612,7 +617,7 @@ def message_publish(message):
         # for later dumping
         t_global.messages["sent"].append(message)
 
-    return 0
+    return RC_SUCCESS
 
 def key_delete(key):
     '''Delete a key from redis'''
@@ -630,7 +635,7 @@ def key_delete(key):
 
             backoff(counter)
 
-    return 0
+    return RC_SUCCESS
 
 def key_set_once(key, value):
     '''Set a key once in redis'''
@@ -647,7 +652,7 @@ def key_set_once(key, value):
 
             backoff(counter)
 
-    return 0
+    return RC_SUCCESS
 
 def key_set(key, value):
     '''Set a key in redis if it does not already exist'''
@@ -700,7 +705,7 @@ def backoff(attempts):
         # back off more, spin even slower
         time.sleep(0.5)
 
-    return 0
+    return RC_SUCCESS
 
 def process_options ():
     '''Define the CLI argument parsing options'''
@@ -818,7 +823,7 @@ def cleanup():
     for msg in t_global.processed_messages:
         t_global.log.debug("\t%s" % (msg))
 
-    return 0
+    return RC_SUCCESS
 
 def get_followers_list(followers):
     '''Generate a list of the followers'''
@@ -853,7 +858,7 @@ def do_timeout():
         elif len(t_global.followers["gone"]) != 0:
             t_global.log.critical("These followers never reach 'gone': %s" % (get_followers_list(t_global.followers["gone"])))
 
-    sys.exit(3)
+    sys.exit(RC_TIMEOUT)
 
 
 def sighandler(signum, frame):
@@ -865,7 +870,7 @@ def sighandler(signum, frame):
     else:
         t_global.log.info("Signal handler called with signal", signum)
 
-    return 0
+    return RC_SUCCESS
 
 def connection_watchdog():
     '''Check if the redis connection is still open'''
@@ -882,7 +887,7 @@ def connection_watchdog():
             t_global.log.error("%s" % (con_error))
             t_global.log.error("Redis connection failed")
 
-    return 0
+    return RC_SUCCESS
 
 def main():
     '''Main control block'''
@@ -891,12 +896,12 @@ def main():
 
     if len(t_global.args.roadblock_leader_id) == 0:
         t_global.log.critical("You must specify the leader's ID using --leader-id")
-        return 2
+        return RC_INVALID_INPUT
 
     if t_global.args.roadblock_role == "leader":
         if len(t_global.args.roadblock_followers) == 0:
             t_global.log.critical("There must be at least one follower")
-            return 2
+            return RC_INVALID_INPUT
         if t_global.args.abort:
             t_global.leader_abort = True
 
@@ -917,7 +922,7 @@ def main():
             t_global.message_log = open(t_global.args.message_log, "w")
         except IOError:
             t_global.log.critical("Could not open message log '%s' for writing!" % (t_global.args.message_log))
-            return 2
+            return RC_INVALID_INPUT
 
     define_msg_schema()
     define_usr_msg_schema()
@@ -929,14 +934,14 @@ def main():
                 t_global.user_messages = json.load(user_messages)
         except IOError:
             t_global.log.critical("Could not load the user messages '%s'!" % (t_global.args.user_messages))
-            return 2
+            return RC_INVALID_INPUT
 
         try:
             jsonschema.validate(instance=t_global.user_messages, schema=t_global.user_schema)
         except jsonschema.exceptions.SchemaError as exception:
             t_global.log.critical(exception)
             t_global.log.critical("Could not JSON validate the user messages!")
-            return 2
+            return RC_INVALID_INPUT
 
     # define a signal handler that will respond to SIGALRM when a
     # timeout even occurs
@@ -1142,10 +1147,10 @@ def main():
     t_global.log.info("Exiting")
     if t_global.leader_abort is True or t_global.follower_abort is True:
         t_global.log.info("Roadblock Completed with an Abort")
-        return 4
+        return RC_ABORT
     else:
         t_global.log.info("Roadblock Completed Successfully")
-        return 0
+        return RC_SUCCESS
 
 if __name__ == "__main__":
     t_global = global_vars()
