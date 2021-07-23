@@ -474,7 +474,7 @@ def message_handle (message):
             signal.alarm(0)
             t_global.alarm_active = False
             t_global.log.critical("The timeout has already occurred")
-            return -2
+            return 2
     elif msg_command == "switch-buses":
         t_global.log.debug("switching busses")
 
