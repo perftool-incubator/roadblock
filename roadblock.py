@@ -494,7 +494,7 @@ def message_handle (message):
 
             if msg_sender in t_global.followers["online"]:
                 t_global.log.info("Received 'follower-online' message from '%s'" % (msg_sender))
-                del t_global.followers["online"][msg_sender]
+                #del t_global.followers["online"][msg_sender]
             elif msg_sender in t_global.args.roadblock_followers:
                 t_global.log.warning("Did I already process this 'follower-online' message from follower '%s'?" % (msg_sender))
             else:
