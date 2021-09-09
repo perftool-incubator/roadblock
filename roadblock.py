@@ -868,7 +868,7 @@ def sighandler(signum, frame):
         t_global.alarm_active = False
         do_timeout()
     else:
-        t_global.log.info("Signal handler called with signal", signum)
+        t_global.log.info("Signal handler called with signal %d" % (signum))
 
     return RC_SUCCESS
 
