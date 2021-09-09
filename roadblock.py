@@ -919,7 +919,7 @@ def main():
     if t_global.args.message_log is not None:
         # open the message log, if specified
         try:
-            t_global.message_log = open(t_global.args.message_log, "w")
+            t_global.message_log = open(t_global.args.message_log, "w", encoding="ascii")
         except IOError:
             t_global.log.critical("Could not open message log '%s' for writing!" % (t_global.args.message_log))
             return RC_INVALID_INPUT
@@ -930,7 +930,7 @@ def main():
     if t_global.args.user_messages is not None:
         # load the user messages, if specified
         try:
-            with open(t_global.args.user_messages, "r") as user_messages:
+            with open(t_global.args.user_messages, "r", encoding="ascii") as user_messages:
                 t_global.user_messages = json.load(user_messages)
         except IOError:
             t_global.log.critical("Could not load the user messages '%s'!" % (t_global.args.user_messages))
