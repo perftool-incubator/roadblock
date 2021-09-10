@@ -436,10 +436,10 @@ def send_user_messages():
         user_msg_counter = 1
         for user_msg in t_global.user_messages:
             if "user-string" in user_msg:
-                t_global.log.info("Sending user message %d: 'user-string'" % (user_msg_counter))
+                t_global.log.info("Sending user message %d: 'user-string'", user_msg_counter)
                 message_publish(message_build(user_msg["recipient"]["type"], user_msg["recipient"]["id"], "user-string", user_msg["user-string"]))
             elif "user-object" in user_msg:
-                t_global.log.info("Sending user message %d: 'user-object'" % (user_msg_counter))
+                t_global.log.info("Sending user message %d: 'user-object'", user_msg_counter)
                 message_publish(message_build(user_msg["recipient"]["type"], user_msg["recipient"]["id"], "user-object", user_msg["user-object"]))
 
             user_msg_counter += 1
@@ -449,10 +449,10 @@ def message_handle (message):
 
     msg_uuid = message_get_uuid(message)
     if msg_uuid in t_global.processed_messages:
-        t_global.log.debug("I have already processed this message! [%s]" % (msg_uuid))
+        t_global.log.debug("I have already processed this message! [%s]", msg_uuid)
         return RC_SUCCESS
     else:
-        t_global.log.debug("adding uuid='%s' to the processed messages list" % (msg_uuid))
+        t_global.log.debug("adding uuid='%s' to the processed messages list", msg_uuid)
         t_global.processed_messages[msg_uuid] = True
 
         if t_global.message_log is not None:
@@ -473,8 +473,8 @@ def message_handle (message):
         if timeout < 0:
             signal.alarm(abs(timeout))
             t_global.alarm_active = True
-            t_global.log.info("The new timeout value is in %d seconds" % (abs(timeout)))
-            t_global.log.info("Timeout: %s" % (datetime.datetime.utcfromtimestamp(cluster_timeout).strftime("%Y-%m-%d at %H:%M:%S UTC")))
+            t_global.log.info("The new timeout value is in %d seconds", abs(timeout))
+            t_global.log.info("Timeout: %s", datetime.datetime.utcfromtimestamp(cluster_timeout).strftime("%Y-%m-%d at %H:%M:%S UTC"))
         else:
             signal.alarm(0)
             t_global.alarm_active = False
@@ -493,12 +493,12 @@ def message_handle (message):
             msg_sender = message_get_sender(message)
 
             if msg_sender in t_global.followers["online"]:
-                t_global.log.info("Received 'follower-online' message from '%s'" % (msg_sender))
+                t_global.log.info("Received 'follower-online' message from '%s'", msg_sender)
                 del t_global.followers["online"][msg_sender]
             elif msg_sender in t_global.args.roadblock_followers:
-                t_global.log.warning("Did I already process this 'follower-online' message from follower '%s'?" % (msg_sender))
+                t_global.log.warning("Did I already process this 'follower-online' message from follower '%s'?", msg_sender)
             else:
-                t_global.log.info("Received 'follower-online' message from unknown follower '%s'" % (msg_sender))
+                t_global.log.info("Received 'follower-online' message from unknown follower '%s'", msg_sender)
 
             if len(t_global.followers["online"]) == 0:
                 t_global.log.info("Sending 'all-online' message")
@@ -532,12 +532,12 @@ def message_handle (message):
             msg_sender = message_get_sender(message)
 
             if msg_sender in t_global.followers["ready"]:
-                t_global.log.info("Received '%s' message from '%s'" % (msg_command, msg_sender))
+                t_global.log.info("Received '%s' message from '%s'", msg_command, msg_sender)
                 del t_global.followers["ready"][msg_sender]
             elif msg_sender in t_global.args.roadblock_followers:
-                t_global.log.warning("Received a redundant '%s' message from follower '%s'?" % (msg_command, msg_sender))
+                t_global.log.warning("Received a redundant '%s' message from follower '%s'?", msg_command, msg_sender)
             else:
-                t_global.log.info("Received '%s' message from unknown follower '%s'" % (msg_command, msg_sender))
+                t_global.log.info("Received '%s' message from unknown follower '%s'", msg_command, msg_sender)
 
             if len(t_global.followers["ready"]) == 0:
                 t_global.log.info("Sending 'all-ready' message")
@@ -572,12 +572,12 @@ def message_handle (message):
             msg_sender = message_get_sender(message)
 
             if msg_sender in t_global.followers["gone"]:
-                t_global.log.info("Received 'follower-gone' message from '%s'" % (msg_sender))
+                t_global.log.info("Received 'follower-gone' message from '%s'", msg_sender)
                 del t_global.followers["gone"][msg_sender]
             elif msg_sender in t_global.args.roadblock_followers:
-                t_global.log.warning("Received a redundant 'follower-gone' message from follower '%s'?" % (msg_sender))
+                t_global.log.warning("Received a redundant 'follower-gone' message from follower '%s'?", msg_sender)
             else:
-                t_global.log.info("Received 'follower-gone' message from unknown follower '%s'" % (msg_sender))
+                t_global.log.info("Received 'follower-gone' message from unknown follower '%s'", msg_sender)
 
             if len(t_global.followers["gone"]) == 0:
                 # send a message that will probably not be observed by
@@ -590,7 +590,7 @@ def message_handle (message):
     elif msg_command == "initiator-info":
         t_global.initiator_type = message_get_sender_type(message)
         t_global.initiator_id = message_get_sender(message)
-        t_global.log.debug("Received an 'initiator-info' message with type='%s' and id='%s'" % (t_global.initiator_type, t_global.initiator_id))
+        t_global.log.debug("Received an 'initiator-info' message with type='%s' and id='%s'", t_global.initiator_type, t_global.initiator_id)
 
     return RC_SUCCESS
 
@@ -608,7 +608,7 @@ def message_publish(message):
         ret_val = t_global.redcon.publish(t_global.args.roadblock_uuid + "__busB", message_str)
 
         if ret_val == 0:
-            t_global.log.warning("Failed attempt %d to publish message '%s'" % (counter, message))
+            t_global.log.warning("Failed attempt %d to publish message '%s'", counter, message)
 
             backoff(counter)
 
@@ -631,7 +631,7 @@ def key_delete(key):
         ret_val = t_global.redcon.delete(key)
 
         if ret_val == 0:
-            t_global.log.warning("Failed attempt %d to delete key '%s'" % (counter, key))
+            t_global.log.warning("Failed attempt %d to delete key '%s'", counter, key)
 
             backoff(counter)
 
@@ -648,7 +648,7 @@ def key_set_once(key, value):
         ret_val = t_global.redcon.msetnx( { key: value } )
 
         if ret_val == 0:
-            t_global.log.warning("Failed attempt %d to set key '%s' with value '%s' once" % (counter, key, value))
+            t_global.log.warning("Failed attempt %d to set key '%s' with value '%s' once", counter, key, value)
 
             backoff(counter)
 
@@ -679,7 +679,7 @@ def list_append(key, value):
         ret_val = t_global.redcon.rpush(key, value)
 
         if ret_val == 0:
-            t_global.log.warning("Failed attempt %d to append value '%s' to key '%s'" % (counter, value, key))
+            t_global.log.warning("Failed attempt %d to append value '%s' to key '%s'", counter, value, key)
 
             backoff(counter)
 
@@ -821,7 +821,7 @@ def cleanup():
 
     t_global.log.debug("Processed Messages:")
     for msg in t_global.processed_messages:
-        t_global.log.debug("\t%s" % (msg))
+        t_global.log.debug("\t%s", msg)
 
     return RC_SUCCESS
 
@@ -852,11 +852,11 @@ def do_timeout():
 
     if t_global.args.roadblock_role == "leader":
         if len(t_global.followers["online"]) != 0:
-            t_global.log.critical("These followers never reached 'online': %s" % (get_followers_list(t_global.followers["online"])))
+            t_global.log.critical("These followers never reached 'online': %s", get_followers_list(t_global.followers["online"]))
         elif len(t_global.followers["ready"]) != 0:
-            t_global.log.critical("These followers never reached 'ready': %s" % (get_followers_list(t_global.followers["ready"])))
+            t_global.log.critical("These followers never reached 'ready': %s", get_followers_list(t_global.followers["ready"]))
         elif len(t_global.followers["gone"]) != 0:
-            t_global.log.critical("These followers never reach 'gone': %s" % (get_followers_list(t_global.followers["gone"])))
+            t_global.log.critical("These followers never reach 'gone': %s", get_followers_list(t_global.followers["gone"]))
 
     sys.exit(RC_TIMEOUT)
 
@@ -868,7 +868,7 @@ def sighandler(signum, frame):
         t_global.alarm_active = False
         do_timeout()
     else:
-        t_global.log.info("Signal handler called with signal", signum)
+        t_global.log.info("Signal handler called with signal %d", signum)
 
     return RC_SUCCESS
 
@@ -884,7 +884,7 @@ def connection_watchdog():
                 t_global.log.error("con_pool_state=False")
         except redis.exceptions.ConnectionError as con_error:
             t_global.con_pool_state = False
-            t_global.log.error("%s" % (con_error))
+            t_global.log.error("%s", con_error)
             t_global.log.error("Redis connection failed")
 
     return RC_SUCCESS
@@ -919,9 +919,9 @@ def main():
     if t_global.args.message_log is not None:
         # open the message log, if specified
         try:
-            t_global.message_log = open(t_global.args.message_log, "w")
+            t_global.message_log = open(t_global.args.message_log, "w", encoding="ascii")
         except IOError:
-            t_global.log.critical("Could not open message log '%s' for writing!" % (t_global.args.message_log))
+            t_global.log.critical("Could not open message log '%s' for writing!", t_global.args.message_log)
             return RC_INVALID_INPUT
 
     define_msg_schema()
@@ -930,10 +930,10 @@ def main():
     if t_global.args.user_messages is not None:
         # load the user messages, if specified
         try:
-            with open(t_global.args.user_messages, "r") as user_messages:
+            with open(t_global.args.user_messages, "r", encoding="ascii") as user_messages:
                 t_global.user_messages = json.load(user_messages)
         except IOError:
-            t_global.log.critical("Could not load the user messages '%s'!" % (t_global.args.user_messages))
+            t_global.log.critical("Could not load the user messages '%s'!", t_global.args.user_messages)
             return RC_INVALID_INPUT
 
         try:
@@ -951,9 +951,9 @@ def main():
     signal.alarm(t_global.args.roadblock_timeout)
     t_global.alarm_active = True
     mytime = calendar.timegm(time.gmtime())
-    t_global.log.info("Current Time: %s" % (datetime.datetime.utcfromtimestamp(mytime).strftime("%Y-%m-%d at %H:%M:%S UTC")))
+    t_global.log.info("Current Time: %s", datetime.datetime.utcfromtimestamp(mytime).strftime("%Y-%m-%d at %H:%M:%S UTC"))
     cluster_timeout = mytime + t_global.args.roadblock_timeout
-    t_global.log.info("Timeout: %s" % (datetime.datetime.utcfromtimestamp(cluster_timeout).strftime("%Y-%m-%d at %H:%M:%S UTC")))
+    t_global.log.info("Timeout: %s", datetime.datetime.utcfromtimestamp(cluster_timeout).strftime("%Y-%m-%d at %H:%M:%S UTC"))
 
     # create the redis connections
     while not t_global.con_pool_state:
@@ -967,7 +967,7 @@ def main():
             t_global.redcon.ping()
             t_global.con_pool_state = True
         except redis.exceptions.ConnectionError as con_error:
-            t_global.log.error("%s" % (con_error))
+            t_global.log.error("%s", con_error)
             t_global.log.error("Redis connection could not be opened!")
             time.sleep(3)
 
@@ -977,15 +977,15 @@ def main():
     t_global.con_watchdog = threading.Thread(target = connection_watchdog, args = ())
     t_global.con_watchdog.start()
 
-    t_global.log.info("Roadblock UUID: %s" % (t_global.args.roadblock_uuid))
-    t_global.log.info("Role: %s" % (t_global.args.roadblock_role))
+    t_global.log.info("Roadblock UUID: %s", t_global.args.roadblock_uuid)
+    t_global.log.info("Role: %s", t_global.args.roadblock_role)
     if t_global.args.roadblock_role == "follower":
-        t_global.log.info("Follower ID: %s" % (t_global.args.roadblock_follower_id))
-        t_global.log.info("Leader ID: %s" % (t_global.args.roadblock_leader_id))
+        t_global.log.info("Follower ID: %s", t_global.args.roadblock_follower_id)
+        t_global.log.info("Leader ID: %s", t_global.args.roadblock_leader_id)
     elif t_global.args.roadblock_role == "leader":
-        t_global.log.info("Leader ID: %s" % (t_global.args.roadblock_leader_id))
-        t_global.log.info("Total followers: %d" % (len(t_global.args.roadblock_followers)))
-        t_global.log.info("Followers: %s" % (t_global.args.roadblock_followers))
+        t_global.log.info("Leader ID: %s", t_global.args.roadblock_leader_id)
+        t_global.log.info("Total followers: %d", len(t_global.args.roadblock_followers))
+        t_global.log.info("Followers: %s", t_global.args.roadblock_followers)
     if t_global.args.abort:
         t_global.log.info("Abort: True")
     else:
@@ -1068,21 +1068,21 @@ def main():
                 time.sleep(0.001)
             else:
                 msg_str = msg["data"].decode()
-                t_global.log.debug("initiator received msg=[%s] on busB" % (msg_str))
+                t_global.log.debug("initiator received msg=[%s] on busB", msg_str)
 
                 msg = message_from_str(msg_str)
 
                 if not message_validate(msg):
-                    t_global.log.error("initiator received a message which did not validate! [%s]" % (msg_str))
+                    t_global.log.error("initiator received a message which did not validate! [%s]", msg_str)
                 else:
                     # copy the message over to busA
-                    t_global.log.debug("initiator mirroring msg=[%s] to busA" % (msg_str))
+                    t_global.log.debug("initiator mirroring msg=[%s] to busA", msg_str)
                     list_append(t_global.args.roadblock_uuid + "__busA", msg_str)
 
                     if not message_for_me(msg):
-                        t_global.log.debug("initiator received a message which is not for me! [%s]" % (msg_str))
+                        t_global.log.debug("initiator received a message which is not for me! [%s]", msg_str)
                     else:
-                        t_global.log.debug("initiator received a message for me! [%s]" % (msg_str))
+                        t_global.log.debug("initiator received a message for me! [%s]", msg_str)
                         ret_val = message_handle(msg)
                         if ret_val:
                             return ret_val
@@ -1099,12 +1099,12 @@ def main():
             if len(msg_list):
                 for msg_str in msg_list:
                     msg_list_index += 1
-                    t_global.log.debug("received msg=[%s] on busA with status_index=[%d]" % (msg_str, msg_list_index))
+                    t_global.log.debug("received msg=[%s] on busA with status_index=[%d]", msg_str, msg_list_index)
 
                     msg = message_from_str(msg_str)
 
                     if not message_validate(msg):
-                        t_global.log.error("received a message which did not validate! [%s]" % (msg_str))
+                        t_global.log.error("received a message which did not validate! [%s]", msg_str)
                     else:
                         if not message_for_me(msg):
                             t_global.log.debug("received a message which is not for me!")
@@ -1126,12 +1126,12 @@ def main():
             time.sleep(0.001)
         else:
             msg_str = msg["data"].decode()
-            t_global.log.debug("received msg=[%s] on busB" % (msg_str))
+            t_global.log.debug("received msg=[%s] on busB", msg_str)
 
             msg = message_from_str(msg_str)
 
             if not message_validate(msg):
-                t_global.log.error("received a message which did not validate! [%s]" % (msg_str))
+                t_global.log.error("received a message which did not validate! [%s]", msg_str)
             else:
                 if not message_for_me(msg):
                     t_global.log.debug("received a message which is not for me!")
