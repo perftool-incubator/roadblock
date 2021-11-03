@@ -673,6 +673,7 @@ def list_append(key, value):
     ret_val = 0
     counter = 0
     while ret_val == 0:
+        counter += 1
         # if this call returns 0 then it failed somehow since it
         # should be the size of the list after we have added to it, so
         # we retry
