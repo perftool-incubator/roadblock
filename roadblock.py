@@ -95,7 +95,7 @@ def message_build_custom(sender_type, sender_id, recipient_type, recipient_id, c
                 "command": command
             }
         },
-        "checksum": None
+        "tx_checksum": None
     }
 
     if recipient_type != "all":
@@ -109,36 +109,80 @@ def message_build_custom(sender_type, sender_id, recipient_type, recipient_id, c
         else:
             message["payload"]["message"]["value"] = str(value)
 
-    message["checksum"] = hashlib.sha256(str(message_to_str(message["payload"])).encode("utf-8")).hexdigest()
+    message["tx_checksum"] = hashlib.sha256(str(message_to_str(message["payload"])).encode("utf-8")).hexdigest()
 
     return message
 
 def message_validate(message):
     '''Validate that a received message matches the message schema and that it is not corrupted'''
 
-    try:
-        jsonschema.validate(instance=message, schema=t_global.schema)
+    if t_global.args.message_validation == "none":
+        return True
 
-        checksum = hashlib.sha256(str(message_to_str(message["payload"])).encode("utf-8")).hexdigest()
+    if t_global.args.message_validation in [ "checksum", "all" ]:
+        # the checksum comparison appears to be fairly light weight so do
+        # that first -- no reason to continue with schema validation if
+        # this fails
+        if not bool(message["tx_checksum"] == message["rx_checksum"]):
+            t_global.log.error("message failed checksum validation [%s]", message_to_str(message))
+            return False
+        else:
+            t_global.log.debug("message passed checksum validation [%s]", message_to_str(message))
 
-        return bool(message["checksum"] == checksum)
-    except jsonschema.exceptions.SchemaError:
-        return False
+    if t_global.args.message_validation in [ "schema", "all" ]:
+        try:
+            jsonschema.validate(instance=message, schema=t_global.schema)
+            t_global.log.debug("message passed schema validation [%s]", message_to_str(message))
+
+        except jsonschema.exceptions.SchemaError:
+            t_global.log.error("message failed schema validation [%s]", message_to_str(message))
+            return False
+
+    return True
 
 def message_for_me(message):
     '''Determine if a received message was intended for me'''
 
-    message["payload"]["recipient"]["timestamp"] = calendar.timegm(time.gmtime())
+    # grab the rx_timestamp ASAP after beginning to process the message
+    rx_timestamp = calendar.timegm(time.gmtime())
+
+    incomplete_message = False
+
+    if not "payload" in message:
+        incomplete_message = True
+    elif not "recipient" in message["payload"]:
+        incomplete_message = True
+    elif not "sender" in message["payload"]:
+        incomplete_message = True
+    elif not "id" in message["payload"]["sender"]:
+        incomplete_message = True
+    elif not "recipient" in message["payload"]:
+        incomplete_message = True
+    elif not "type" in message["payload"]["recipient"]:
+        incomplete_message = True
+
+    if incomplete_message:
+        t_global.log.error("incomplete message received [%s]", message_to_str(message))
+        return False
 
     if message["payload"]["sender"]["id"] == t_global.my_id and message["payload"]["sender"]["type"] == t_global.args.roadblock_role:
         # I'm the sender so ignore it
         return False
     elif message["payload"]["recipient"]["type"] == "all":
-        return True
+        pass
     elif message["payload"]["recipient"]["type"] == t_global.args.roadblock_role and message["payload"]["recipient"]["id"] == t_global.my_id:
-        return True
+        pass
     else:
         return False
+
+    if t_global.args.message_validation in [ "checksum", "all" ]:
+        # get the rx_checksum before we modify the message by adding the rx_timestamp to it
+        message["rx_checksum"] = hashlib.sha256(str(message_to_str(message["payload"])).encode("utf-8")).hexdigest()
+
+    # embed the rx_timestamp into the message
+    message["payload"]["recipient"]["timestamp"] = rx_timestamp
+
+    return True
 
 def message_get_command(message):
     '''Extract the command from a message'''
@@ -213,6 +257,9 @@ def define_usr_msg_schema():
             "recipient": {
                 "type": "object",
                 "properties": {
+                    "timestamp": {
+                        "type": "integer"
+                    },
                     "type": {
                         "type": "string",
                         "enum": [
@@ -283,6 +330,9 @@ def define_msg_schema():
                     "recipient": {
                         "type": "object",
                         "properties": {
+                            "timestamp": {
+                                "type": "integer"
+                            },
                             "type": {
                                 "type": "string",
                                 "enum": [
@@ -415,7 +465,12 @@ def define_msg_schema():
                 ],
                 "additionalProperties": False
             },
-            "checksum": {
+            "tx_checksum": {
+                "type": "string",
+                "minLength": 64,
+                "maxLength": 64
+            },
+            "rx_checksum": {
                 "type": "string",
                 "minLength": 64,
                 "maxLength": 64
@@ -423,7 +478,7 @@ def define_msg_schema():
         },
         "required": [
             "payload",
-            "checksum"
+            "tx_checksum"
         ],
         "additionalProperties": False
     }
@@ -782,6 +837,12 @@ def process_options ():
                         default = "normal",
                         choices = [ "normal", "debug" ])
 
+    parser.add_argument("--message-validation",
+                        dest = "message_validation",
+                        help = "What type of message validation to do",
+                        default = "all",
+                        choices = [ "none", "checksum", "schema", "all" ])
+
     t_global.args = parser.parse_args()
 
     if t_global.args.log_level == 'debug':
@@ -1073,17 +1134,17 @@ def main():
 
                 msg = message_from_str(msg_str)
 
-                if not message_validate(msg):
-                    t_global.log.error("initiator received a message which did not validate! [%s]", msg_str)
-                else:
-                    # copy the message over to busA
-                    t_global.log.debug("initiator mirroring msg=[%s] to busA", msg_str)
-                    list_append(t_global.args.roadblock_uuid + "__busA", msg_str)
+                # copy the message over to busA
+                t_global.log.debug("initiator mirroring msg=[%s] to busA", msg_str)
+                list_append(t_global.args.roadblock_uuid + "__busA", msg_str)
 
-                    if not message_for_me(msg):
-                        t_global.log.debug("initiator received a message which is not for me! [%s]", msg_str)
+                if not message_for_me(msg):
+                    t_global.log.debug("received a message which is not for me!")
+                else:
+                    if not message_validate(msg):
+                        t_global.log.error("initiator received a message for me which did not validate! [%s]", msg_str)
                     else:
-                        t_global.log.debug("initiator received a message for me! [%s]", msg_str)
+                        t_global.log.debug("initiator received a validated message for me! [%s]", msg_str)
                         ret_val = message_handle(msg)
                         if ret_val:
                             return ret_val
@@ -1104,13 +1165,13 @@ def main():
 
                     msg = message_from_str(msg_str)
 
-                    if not message_validate(msg):
-                        t_global.log.error("received a message which did not validate! [%s]", msg_str)
+                    if not message_for_me(msg):
+                        t_global.log.debug("received a message which is not for me!")
                     else:
-                        if not message_for_me(msg):
-                            t_global.log.debug("received a message which is not for me!")
+                        if not message_validate(msg):
+                            t_global.log.error("received a message for me which did not validate! [%s]", msg_str)
                         else:
-                            t_global.log.debug("received a message which is for me!")
+                            t_global.log.debug("received a validated message for me!")
                             ret_val = message_handle(msg)
                             if ret_val:
                                 return ret_val
@@ -1131,13 +1192,13 @@ def main():
 
             msg = message_from_str(msg_str)
 
-            if not message_validate(msg):
-                t_global.log.error("received a message which did not validate! [%s]", msg_str)
+            if not message_for_me(msg):
+                t_global.log.debug("received a message which is not for me!")
             else:
-                if not message_for_me(msg):
-                    t_global.log.debug("received a message which is not for me!")
+                if not message_validate(msg):
+                    t_global.log.error("received a message for me which did not validate! [%s]", msg_str)
                 else:
-                    t_global.log.debug("received a message for me!")
+                    t_global.log.debug("received a validated message for me!")
                     ret_val = message_handle(msg)
                     if ret_val:
                         return ret_val
