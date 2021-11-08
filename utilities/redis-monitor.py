@@ -47,7 +47,7 @@ def main():
                              health_check_interval = 0)
         redcon.ping()
     except redis.exceptions.ConnectionError as con_error:
-        print("%s" % (con_error))
+        print(f"EXCEPTION: {con_error}")
         print("ERROR: Redis connection could not be opened!")
         return -1
 

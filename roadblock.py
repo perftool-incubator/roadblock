@@ -878,7 +878,7 @@ def cleanup():
     if t_global.message_log is not None:
         # if the message log is open then dump the message queue and
         # close the file handle
-        print("%s\n" % (json.dumps(t_global.messages, indent = 4, separators=(',', ': '), sort_keys = False)), file=t_global.message_log)
+        print(f"{json.dumps(t_global.messages, indent = 4, separators=(',', ': '), sort_keys = False)}\n", file=t_global.message_log)
         t_global.message_log.close()
 
     t_global.log.debug("Processed Messages:")
