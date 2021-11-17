@@ -9,6 +9,7 @@
 	    "name": "default",
 	    "requirements": [
 		"python-redis",
+		"hiredis",
 		"python-jsonschema"
 	    ]
 	}
@@ -16,21 +17,28 @@
     "requirements": [
 	{
 	    "name": "python-redis",
-	    "type": "manual",
-	    "manual_info": {
-		"commands": [
-		    "if command -v pip3.9; then pip3.9 install redis; else echo 'pip3.9 not found'; fi",
-		    "if command -v pip3; then pip3 install redis; else echo 'pip3 not found'; fi"
+	    "type": "python3",
+	    "python3_info": {
+		"packages": [
+		    "redis"
+		]
+	    }
+	},
+	{
+	    "name": "hiredis",
+	    "type": "python3",
+	    "python3_info": {
+		"packages": [
+		    "hiredis"
 		]
 	    }
 	},
 	{
 	    "name": "python-jsonschema",
-	    "type": "manual",
-	    "manual_info": {
-		"commands": [
-		    "if command -v pip3.9; then pip3.9 install jsonschema; else echo 'pip3.9 not found'; fi",
-		    "if command -v pip3; then pip3 install jsonschema; else echo 'pip3 not found'; fi"
+	    "type": "python3",
+	    "python3_info": {
+		"packages": [
+		    "jsonschema"
 		]
 	    }
 	}

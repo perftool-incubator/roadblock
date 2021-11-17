@@ -10,6 +10,7 @@ RUN yum install --assumeyes python3-pip
 RUN yum clean all
 
 RUN pip3 install redis
+RUN pip3 install hiredis
 RUN pip3 install jsonschema
 
 
