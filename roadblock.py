@@ -794,7 +794,8 @@ def process_options ():
     parser.add_argument("--leader-id",
                         dest = "roadblock_leader_id",
                         help = "What is leader ID for this specific roadblock.",
-                        type = str)
+                        type = str,
+                        required = True)
 
     parser.add_argument("--redis-server",
                         dest = "roadblock_redis_server",
