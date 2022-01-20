@@ -1029,9 +1029,18 @@ def main():
             t_global.redcon = redis.Redis(connection_pool = t_global.con_pool)
             t_global.redcon.ping()
             t_global.con_pool_state = True
+        except redis.exceptions.ResponseError as con_error:
+            match = re.search(r"WRONGPASS", str(con_error))
+            if match:
+                t_global.log.error("Invalid username/password pair")
+                return RC_INVALID_INPUT
+            else:
+                t_global.log.error("%s", con_error)
+                t_global.log.error("Redis connection could not be opened due to response error!")
+                time.sleep(3)
         except redis.exceptions.ConnectionError as con_error:
             t_global.log.error("%s", con_error)
-            t_global.log.error("Redis connection could not be opened!")
+            t_global.log.error("Redis connection could not be opened due to connection error!")
             time.sleep(3)
 
     t_global.pubsubcon = t_global.redcon.pubsub(ignore_subscribe_messages = True)
