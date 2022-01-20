@@ -14,6 +14,9 @@ import uuid
 import threading
 import logging
 import sys
+import re
+import subprocess
+import select
 
 from dataclasses import dataclass
 
@@ -36,6 +39,11 @@ class global_vars:
     con_pool_state = False
     con_watchdog_exit = None
     con_watchdog = None
+    wait_for_launcher_thread = None
+    wait_for_process = None
+    wait_for_monitor_thread = None
+    wait_for_monitor_exit = None
+    wait_for_monitor_start = None
     redcon = None
     pubsubcon = None
     initiator = False
@@ -844,7 +852,22 @@ def process_options ():
                         default = "all",
                         choices = [ "none", "checksum", "schema", "all" ])
 
+    parser.add_argument("--wait-for",
+                        dest = "wait_for",
+                        help = "Launch this program/script and wait for it to complete before proceeding.  Requires --wait-for-log to be set.",
+                        default = None,
+                        type = str)
+
+    parser.add_argument("--wait-for-log",
+                        dest = "wait_for_log",
+                        help = "Where to log the output from the --wait-for program/script",
+                        default = None,
+                        type = str)
+
     t_global.args = parser.parse_args()
+
+    if t_global.args.wait_for is not None and t_global.args.wait_for_log is None:
+        parser.error("When --wait-for is defined then --wait-for-log must also be defined")
 
     if t_global.args.log_level == 'debug':
         logging.basicConfig(level = logging.DEBUG, format = t_global.log_debug_format, stream = sys.stdout)
@@ -860,6 +883,14 @@ def cleanup():
     if t_global.alarm_active:
         t_global.log.info("Disabling timeout alarm")
         signal.alarm(0)
+
+    if t_global.args.wait_for is not None:
+        t_global.log.info("Closing wait_for monitor thread")
+        t_global.wait_for_monitor_exit.set()
+        t_global.wait_for_monitor_thread.join()
+
+        t_global.log.info("Closing wait_for launcher thread")
+        t_global.wait_for_launcher_thread.join()
 
     if t_global.con_pool_state:
         if t_global.args.roadblock_role == "leader":
@@ -902,6 +933,13 @@ def do_timeout():
     '''Handle a roadblock timeout event'''
 
     t_global.log.critical("Roadblock failed with timeout")
+
+    if t_global.args.wait_for is not None:
+        if t_global.wait_for_process.poll() is None:
+            t_global.log.critical("Killing wait_for process")
+            t_global.wait_for_process.kill()
+        else:
+            t_global.log.info("wait_for process has already exited")
 
     if t_global.con_pool_state and t_global.initiator:
         # set a persistent flag that the roadblock timed out so that
@@ -949,6 +987,64 @@ def connection_watchdog():
             t_global.con_pool_state = False
             t_global.log.error("%s", con_error)
             t_global.log.error("Redis connection failed")
+
+    return RC_SUCCESS
+
+def wait_for_process_io_handler():
+    '''Handle the output logging of a --wait-for program/script process'''
+
+    with open(t_global.args.wait_for_log, "w", encoding = "ascii") as wait_for_log_fh:
+        # process lines while the process is running in a non-blocking fashion
+        while t_global.wait_for_process.poll() is None:
+            t_global.wait_for_process.stdout.flush()
+            ready_streams = select.select([t_global.wait_for_process.stdout], [], [], 1)
+            if t_global.wait_for_process.stdout in ready_streams[0]:
+                for line in t_global.wait_for_process.stdout:
+                    wait_for_log_fh.write(line.decode("ascii"))
+
+        # process any remaining lines that haven't been handled yet
+        # (this will not block now so it is simpler than above)
+        for line in t_global.wait_for_process.stdout:
+            wait_for_log_fh.write(line.decode("ascii"))
+
+    return RC_SUCCESS
+
+def wait_for_process_monitor():
+    '''Monitor the status of a --wait-for program/script process'''
+
+    t_global.log.info("wait_for monitor is waiting")
+
+    t_global.wait_for_monitor_start.wait()
+
+    t_global.log.info("wait_for monitor is starting")
+
+    while not t_global.wait_for_monitor_exit.is_set():
+        if t_global.wait_for_process.poll() is None:
+            t_global.log.info("wait_for process is still running")
+        else:
+            t_global.log.info("wait_for process is complete")
+            t_global.wait_for_monitor_exit.set()
+
+        time.sleep(1)
+
+    t_global.log.info("wait_for monitor is exiting")
+
+    return RC_SUCCESS
+
+def wait_for_process_launcher():
+    '''Handle the execution of a --wait-for program/script'''
+
+    wait_for_cmd = t_global.args.wait_for.split(' ')
+
+    t_global.wait_for_process = subprocess.Popen(wait_for_cmd, stdout = subprocess.PIPE, stderr = subprocess.STDOUT)
+    t_global.wait_for_monitor_start.set()
+    wait_for_io_thread = threading.Thread(target = wait_for_process_io_handler, args = ())
+    wait_for_io_thread.start()
+
+    ret_val = t_global.wait_for_process.wait()
+    wait_for_io_thread.join()
+
+    t_global.log.info("wait_for process exited with return code %d", ret_val)
 
     return RC_SUCCESS
 
@@ -1010,11 +1106,20 @@ def main():
     # timeout even occurs
     signal.signal(signal.SIGALRM, sighandler)
 
+    mytime = calendar.timegm(time.gmtime())
+    t_global.log.info("Current Time: %s", datetime.datetime.utcfromtimestamp(mytime).strftime("%Y-%m-%d at %H:%M:%S UTC"))
+
+    if t_global.args.wait_for is not None:
+        t_global.wait_for_monitor_start = threading.Event()
+        t_global.wait_for_launcher_thread = threading.Thread(target = wait_for_process_launcher, args = ())
+        t_global.wait_for_monitor_thread = threading.Thread(target = wait_for_process_monitor, args = ())
+        t_global.wait_for_monitor_exit = threading.Event()
+        t_global.wait_for_launcher_thread.start()
+        t_global.wait_for_monitor_thread.start()
+
     # set the default timeout alarm
     signal.alarm(t_global.args.roadblock_timeout)
     t_global.alarm_active = True
-    mytime = calendar.timegm(time.gmtime())
-    t_global.log.info("Current Time: %s", datetime.datetime.utcfromtimestamp(mytime).strftime("%Y-%m-%d at %H:%M:%S UTC"))
     cluster_timeout = mytime + t_global.args.roadblock_timeout
     t_global.log.info("Timeout: %s", datetime.datetime.utcfromtimestamp(cluster_timeout).strftime("%Y-%m-%d at %H:%M:%S UTC"))
 

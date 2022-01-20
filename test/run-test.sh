@@ -10,11 +10,12 @@ POD_NAME=roadblock-test
 EXPECTED_LEADER_RC=0
 ABORT_TEST=0
 TIMEOUT_TEST=0
+WAIT_FOR_TEST=0
 RANDOMIZE_INITIATOR=1
 #ROADBLOCK_DEBUG=" --log-level debug "
 ROADBLOCK_IMAGE_NAME=roadblock-client-test
 
-options=$(getopt -o "f:ta" --long "followers:,timeout,abort" -- "$@")
+options=$(getopt -o "f:taw" --long "followers:,timeout,abort,wait-for" -- "$@")
 if [ $? -eq 0 ]; then
     eval set -- "${options}"
 else
@@ -43,6 +44,10 @@ while true; do
             ABORT_TEST=1
             EXPECTED_LEADER_RC=4
             echo -e "\nEnabling roadblock abort test"
+            ;;
+        -w|--wait-for)
+            WAIT_FOR_TEST=1
+            echo -e "\nEnabling roadblock --wait-for test"
             ;;
         --)
             shift
@@ -120,6 +125,8 @@ if pushd ${REPO_DIR} > /dev/null; then
     # start the roadblock follower container(s)
     for i in $(seq 1 ${NUM_FOLLOWERS}); do
 	ABORT=""
+        WAIT_FOR_ARGS=""
+        WAIT_FOR_CHECK=""
 	if [ "${i}" == "1" ]; then
 	    if [ "${ABORT_TEST}" == "1" ]; then
 		ABORT=" --abort "
@@ -128,13 +135,18 @@ if pushd ${REPO_DIR} > /dev/null; then
                 echo -e "\nNot starting roadblock follower ${i} container due to timeout test"
 		continue
 	    fi
+            if [ "${WAIT_FOR_TEST}" == "1" ]; then
+                WAIT_FOR_ARGS="--wait-for /opt/roadblock/wait-for-script.sh --wait-for-log /tmp/roadblock.wait-for.log"
+                WAIT_FOR_CHECK="echo -e \"\nRoadblock --wait-for Log:\"; cat /tmp/roadblock.wait-for.log;"
+            fi
 	fi
 	SLEEP_TIME=$((RANDOM%20))
 	echo -e "\nStarting the roadblock follower ${i} container with a sleep ${SLEEP_TIME}"
 	if ! podman run --detach --interactive=true --tty=true --name=${FOLLOWER_PREFIX}_${i} --pod=${POD_NAME} localhost/${ROADBLOCK_IMAGE_NAME} -c \
 	     "sleep ${SLEEP_TIME}; /opt/roadblock/roadblock.py --uuid=${ROADBLOCK_UUID} --role=follower --follower-id=${FOLLOWER_PREFIX}_${i} --redis-server=${REDIS_IP_ADDRESS} \
-	     --redis-password=${REDIS_PASSWORD} --timeout=${ROADBLOCK_TIMEOUT} --leader-id=${LEADER_ID} --message-log=${MESSAGE_LOG} --user-messages=/opt/roadblock/user-messages.json ${ROADBLOCK_DEBUG} ${ABORT}; \
-             echo -e \"\nRoadblock Message Log\"; cat ${MESSAGE_LOG}"; then
+	     --redis-password=${REDIS_PASSWORD} --timeout=${ROADBLOCK_TIMEOUT} --leader-id=${LEADER_ID} --message-log=${MESSAGE_LOG} --user-messages=/opt/roadblock/user-messages.json ${ROADBLOCK_DEBUG} ${ABORT} ${WAIT_FOR_ARGS}; \
+             ${WAIT_FOR_CHECK} \
+             echo -e \"\nRoadblock Message Log\"; cat ${MESSAGE_LOG};"; then
 	    echo "ERROR: Could not start roadblock follower ${i}"
 	    echo "       This will cause a timeout to occur"
 	fi
