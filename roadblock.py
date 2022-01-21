@@ -20,6 +20,7 @@ import select
 import shlex
 
 from dataclasses import dataclass
+from pathlib import Path
 
 import redis
 import jsonschema
@@ -40,6 +41,7 @@ class global_vars:
     con_pool_state = False
     con_watchdog_exit = None
     con_watchdog = None
+    wait_for_cmd = None
     wait_for_launcher_thread = None
     wait_for_process = None
     wait_for_monitor_thread = None
@@ -870,6 +872,14 @@ def process_options ():
     if t_global.args.wait_for is not None and t_global.args.wait_for_log is None:
         parser.error("When --wait-for is defined then --wait-for-log must also be defined")
 
+    if t_global.args.wait_for is not None:
+        t_global.wait_for_cmd = shlex.split(t_global.args.wait_for)
+        p = Path(t_global.wait_for_cmd[0])
+        if not p.exists():
+            parser.error(f"The specified --wait-for command does not exist [{t_global.wait_for_cmd[0]}]")
+        if not p.is_file():
+            parser.error(f"The specified --wait-for command is not a file [{t_global.wait_for_cmd[0]}]")
+
     if t_global.args.log_level == 'debug':
         logging.basicConfig(level = logging.DEBUG, format = t_global.log_debug_format, stream = sys.stdout)
     elif t_global.args.log_level == 'normal':
@@ -936,11 +946,14 @@ def do_timeout():
     t_global.log.critical("Roadblock failed with timeout")
 
     if t_global.args.wait_for is not None:
-        if t_global.wait_for_process.poll() is None:
-            t_global.log.critical("Killing wait_for process")
-            t_global.wait_for_process.kill()
+        if t_global.wait_for_process is not None:
+            if t_global.wait_for_process.poll() is None:
+                t_global.log.critical("Killing wait_for process")
+                t_global.wait_for_process.kill()
+            else:
+                t_global.log.info("wait_for process has already exited")
         else:
-            t_global.log.info("wait_for process has already exited")
+            t_global.log.critical("The wait-for process object is missing")
 
     if t_global.con_pool_state and t_global.initiator:
         # set a persistent flag that the roadblock timed out so that
@@ -1001,12 +1014,12 @@ def wait_for_process_io_handler():
             ready_streams = select.select([t_global.wait_for_process.stdout], [], [], 1)
             if t_global.wait_for_process.stdout in ready_streams[0]:
                 for line in t_global.wait_for_process.stdout:
-                    wait_for_log_fh.write(line.decode("ascii"))
+                    wait_for_log_fh.write(line)
 
         # process any remaining lines that haven't been handled yet
         # (this will not block now so it is simpler than above)
         for line in t_global.wait_for_process.stdout:
-            wait_for_log_fh.write(line.decode("ascii"))
+            wait_for_log_fh.write(line)
 
     return RC_SUCCESS
 
@@ -1020,13 +1033,17 @@ def wait_for_process_monitor():
     t_global.log.info("wait_for monitor is starting")
 
     while not t_global.wait_for_monitor_exit.is_set():
-        if t_global.wait_for_process.poll() is None:
-            t_global.log.info("wait_for process is still running")
-        else:
-            t_global.log.info("wait_for process is complete")
+        if t_global.wait_for_process is None:
+            t_global.log.critical("There is no wait_process to monitor")
             t_global.wait_for_monitor_exit.set()
+        else:
+            if t_global.wait_for_process.poll() is None:
+                t_global.log.info("wait_for process is still running")
+            else:
+                t_global.log.info("wait_for process is complete")
+                t_global.wait_for_monitor_exit.set()
 
-        time.sleep(1)
+            time.sleep(1)
 
     t_global.log.info("wait_for monitor is exiting")
 
@@ -1035,15 +1052,31 @@ def wait_for_process_monitor():
 def wait_for_process_launcher():
     '''Handle the execution of a --wait-for program/script'''
 
-    wait_for_cmd = shlex.split(t_global.args.wait_for)
+    ret_val = -1
 
-    t_global.wait_for_process = subprocess.Popen(wait_for_cmd, stdout = subprocess.PIPE, stderr = subprocess.STDOUT)
-    t_global.wait_for_monitor_start.set()
-    wait_for_io_thread = threading.Thread(target = wait_for_process_io_handler, args = ())
-    wait_for_io_thread.start()
+    try:
+        t_global.wait_for_process = subprocess.Popen(t_global.wait_for_cmd,
+                                                     bufsize = 0,
+                                                     encoding = 'ascii',
+                                                     stdout = subprocess.PIPE,
+                                                     stderr = subprocess.STDOUT)
 
-    ret_val = t_global.wait_for_process.wait()
-    wait_for_io_thread.join()
+        if t_global.wait_for_process is None:
+            t_global.log.critical("The wait for process failed to launch")
+            ret_val = 1
+            t_global.wait_for_monitor_start.set()
+        else:
+            t_global.wait_for_monitor_start.set()
+            wait_for_io_thread = threading.Thread(target = wait_for_process_io_handler, args = ())
+            wait_for_io_thread.start()
+
+            ret_val = t_global.wait_for_process.wait()
+            wait_for_io_thread.join()
+
+    except PermissionError:
+        t_global.log.critical("Received a permission error when attempting to execute --wait-for command")
+        ret_val = 1
+        t_global.wait_for_monitor_start.set()
 
     t_global.log.info("wait_for process exited with return code %d", ret_val)
 
