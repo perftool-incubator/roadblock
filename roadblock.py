@@ -17,6 +17,7 @@ import sys
 import re
 import subprocess
 import select
+import shlex
 
 from dataclasses import dataclass
 
@@ -1034,7 +1035,7 @@ def wait_for_process_monitor():
 def wait_for_process_launcher():
     '''Handle the execution of a --wait-for program/script'''
 
-    wait_for_cmd = t_global.args.wait_for.split(' ')
+    wait_for_cmd = shlex.split(t_global.args.wait_for)
 
     t_global.wait_for_process = subprocess.Popen(wait_for_cmd, stdout = subprocess.PIPE, stderr = subprocess.STDOUT)
     t_global.wait_for_monitor_start.set()

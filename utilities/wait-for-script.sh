@@ -1,5 +1,12 @@
 #!/bin/bash
 
+counter=1
+for arg in "$@"; do
+    echo "argument ${counter}: ${arg}"
+    (( counter += 1 ))
+done
+
+
 TIME=${1}
 RUNTIME=${TIME:-5}
 
