@@ -136,7 +136,7 @@ if pushd ${REPO_DIR} > /dev/null; then
 		continue
 	    fi
             if [ "${WAIT_FOR_TEST}" == "1" ]; then
-                WAIT_FOR_ARGS="--wait-for /opt/roadblock/wait-for-script.sh --wait-for-log /tmp/roadblock.wait-for.log"
+                WAIT_FOR_ARGS="--wait-for '/opt/roadblock/wait-for-script.sh 30' --wait-for-log /tmp/roadblock.wait-for.log"
                 WAIT_FOR_CHECK="echo -e \"\nRoadblock --wait-for Log:\"; cat /tmp/roadblock.wait-for.log;"
             fi
 	fi
