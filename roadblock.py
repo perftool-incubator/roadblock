@@ -18,6 +18,7 @@ import re
 import subprocess
 import select
 import shlex
+import copy
 
 from dataclasses import dataclass
 from pathlib import Path
@@ -29,6 +30,7 @@ RC_SUCCESS=0
 RC_INVALID_INPUT=2
 RC_TIMEOUT=3
 RC_ABORT=4
+RC_HEARTBEAT_TIMEOUT=5
 
 # define some global variables
 @dataclass
@@ -57,12 +59,16 @@ class global_vars:
     watch_busA = True
     watch_busB = False
     leader_abort = False
+    roadblock_waiting = False
     follower_abort = False
     initiator_type = None
     initiator_id = None
     followers = { "online": {},
                   "ready": {},
-                  "gone": {} }
+                  "gone": {},
+                  "waiting": {},
+                  "waiting_backup": {},
+                  "busy_waiting": {} }
     processed_messages = {}
     messages = { "sent": [],
                  "received": [] }
@@ -71,6 +77,8 @@ class global_vars:
     log_debug_format =  '[%(module)s %(funcName)s:%(lineno)d]\n[%(asctime)s][%(levelname) 8s] %(message)s'
     log_normal_format = '[%(asctime)s][%(levelname) 8s] %(message)s'
     log = None
+    heartbeat_timeout = 30
+    heartbeat_mode = None
 
 def message_to_str(message):
     '''Converts a message into a JSON string'''
@@ -392,9 +400,14 @@ def define_msg_schema():
                                     "initiator-info",
                                     "follower-ready",
                                     "follower-ready-abort",
+                                    "follower-ready-waiting",
+                                    "leader-heartbeat",
+                                    "follower-heartbeat",
+                                    "follower-heartbeat-complete",
                                     "all-ready",
                                     "all-go",
                                     "all-abort",
+                                    "all-wait",
                                     "follower-gone",
                                     "all-gone",
                                     "user-string",
@@ -586,16 +599,25 @@ def message_handle (message):
                 t_global.log.info("Sending 'follower-ready-abort' message")
                 message_publish(message_build("leader", t_global.args.roadblock_leader_id, "follower-ready-abort"))
             else:
-                t_global.log.info("Sending 'follower-ready' message")
-                message_publish(message_build("leader", t_global.args.roadblock_leader_id, "follower-ready"))
-    elif msg_command in ("follower-ready", "follower-ready-abort"):
+                if t_global.args.wait_for is not None and t_global.wait_for_process is not None and t_global.wait_for_process.poll() is None:
+                    t_global.log.info("Sending 'follower-ready-waiting' message")
+                    message_publish(message_build("leader", t_global.args.roadblock_leader_id, "follower-ready-waiting"))
+                else:
+                    t_global.log.info("Sending 'follower-ready' message")
+                    message_publish(message_build("leader", t_global.args.roadblock_leader_id, "follower-ready"))
+    elif msg_command in ("follower-ready", "follower-ready-abort", "follower-ready-waiting"):
         if t_global.args.roadblock_role == "leader":
-            t_global.log.debug("leader got a 'follower-ready'")
+            t_global.log.debug("leader got a '%s' message", msg_command)
+
+            msg_sender = message_get_sender(message)
 
             if msg_command == "follower-ready-abort":
                 t_global.leader_abort = True
+            elif msg_command == "follower-ready-waiting":
+                t_global.roadblock_waiting = True
 
-            msg_sender = message_get_sender(message)
+                t_global.log.info("Adding follower '%s' to the waiting list", msg_sender)
+                t_global.followers["busy_waiting"][msg_sender] = True
 
             if msg_sender in t_global.followers["ready"]:
                 t_global.log.info("Received '%s' message from '%s'", msg_command, msg_sender)
@@ -612,9 +634,78 @@ def message_handle (message):
                 if t_global.leader_abort:
                     t_global.log.info("Sending 'all-abort' command")
                     message_publish(message_build("all", "all", "all-abort"))
+                elif t_global.roadblock_waiting:
+                    t_global.log.info("Sending 'all-wait' command")
+                    message_publish(message_build("all", "all", "all-wait"))
+
+                    t_global.log.info("Disabling original timeout")
+                    signal.alarm(0)
+                    t_global.alarm_active = False
+
+                    t_global.log.info("Disabling original timeout signal handler")
+                    t_global.log.info("Enabling heartbeat timeout signal handler")
+                    signal.signal(signal.SIGALRM, heartbeat_signal_handler)
+
+                    t_global.log.info("Sending 'leader-heartbeat' message")
+                    message_publish(message_build("all", "all", "leader-heartbeat"))
+
+                    t_global.log.info("Staring heartbeat monitoring period")
+                    signal.alarm(t_global.heartbeat_timeout)
+                    t_global.alarm_active = True
+
+                    t_global.heartbeat_mode = "monitoring"
                 else:
                     t_global.log.info("Sending 'all-go' command")
                     message_publish(message_build("all", "all", "all-go"))
+    elif msg_command == "all-wait":
+        if t_global.args.roadblock_role == "follower":
+            t_global.log.info("Received 'all-wait' message")
+
+            t_global.log.info("Disabling original timeout")
+            signal.alarm(0)
+            t_global.alarm_active = False
+    elif msg_command == "leader-heartbeat":
+        if t_global.args.roadblock_role == "follower":
+            t_global.log.info("Received 'leader-heartbeat' message")
+
+            if t_global.args.wait_for is not None and t_global.wait_for_process is not None:
+                if t_global.wait_for_process.poll() is not None:
+                    t_global.log.info("Sending 'follower-heartbeat-complete' message")
+                    message_publish(message_build("leader", t_global.args.roadblock_leader_id, "follower-heartbeat-complete"))
+            else:
+                t_global.log.info("Sending 'follower-heartbeat' message")
+                message_publish(message_build("leader", t_global.args.roadblock_leader_id, "follower-heartbeat"))
+    elif msg_command in ("follower-heartbeat", "follower-heartbeat-complete"):
+        if t_global.args.roadblock_role == "leader":
+            t_global.log.info("Received '%s' message", msg_command)
+
+            msg_sender = message_get_sender(message)
+
+            if msg_command == "follower-heartbeat-complete":
+                if msg_sender in t_global.followers["busy_waiting"]:
+                    t_global.log.info("Received heartbeat from follower '%s' and removing from the busy waiting list", msg_sender)
+                    del t_global.followers["busy_waiting"][msg_sender]
+                    del t_global.followers["waiting"][msg_sender]
+                elif msg_sender in t_global.args.roadblock_followers:
+                    t_global.log.warning("Received '%s' from a follower that is not busy waiting?", msg_command, msg_sender)
+                else:
+                    t_global.log.info("Received '%s' message from an unknown follower '%s'", msg_command, msg_sender)
+            elif msg_command == "follower-heartbeat":
+                if msg_sender in t_global.followers["waiting"]:
+                    t_global.log.info("Received heartbeat from follower '%s'", msg_sender)
+                    del t_global.followers["waiting"][msg_sender]
+                elif msg_sender in t_global.args.roadblock_followers:
+                    t_global.log.warning("Received a redundant heartbeat message from follower '%s'?", msg_sender)
+                else:
+                    t_global.log.warning("Received a heartbeat message from an unknown follower '%s'", msg_sender)
+
+            if len(t_global.followers["busy_waiting"]) == 0 and len(t_global.followers["waiting"]) == 0:
+                t_global.log.info("Disabling heartbeat timeout")
+                signal.alarm(0)
+                t_global.alarm_active = False
+
+                t_global.log.info("Sending 'all-go' command")
+                message_publish(message_build("all", "all", "all-go"))
     elif msg_command == "all-ready":
         t_global.log.info("Received 'all-ready' message")
     elif msg_command in ("all-go", "all-abort"):
@@ -940,10 +1031,9 @@ def get_followers_list(followers):
 
     return followers_list
 
-def do_timeout():
-    '''Handle a roadblock timeout event'''
 
-    t_global.log.critical("Roadblock failed with timeout")
+def timeout_internals():
+    '''Steps common to both types of timeout events'''
 
     if t_global.args.wait_for is not None:
         if t_global.wait_for_process is not None:
@@ -973,17 +1063,68 @@ def do_timeout():
         elif len(t_global.followers["gone"]) != 0:
             t_global.log.critical("These followers never reach 'gone': %s", get_followers_list(t_global.followers["gone"]))
 
+    return RC_SUCCESS
+
+
+def do_heartbeat_timeout():
+    '''Handle a heartbeat timeout event'''
+
+    if t_global.heartbeat_mode == "monitoring":
+        if len(t_global.followers["waiting"]) != 0:
+            t_global.log.critical("Roadblock failed with a heartbeat timeout")
+
+            timeout_intervals()
+            
+            sys.exit(RC_HEARTBEAT_TIMEOUT)
+        else:
+            t_global.log.info("Ending current heartbeat monitoring period")
+            signal.alarm(0)
+            t_global.alarm_active = False
+
+            t_global.log.info("Waiting to start next heartbeat monitoring period")
+            signal.alarm(t_global.heartbeat_timeout)
+            t_global.alarm_active = True
+            
+            t_global.heartbeat_mode == "sleeping"
+
+            # rebuild the tracking list by copying from a backup
+            t_global.followers["waiting"] = copy.deepcopy(t_global.followers["waiting_backup"])
+    elif t_global.heartbeat_mode == "sleeping":
+        t_global.log.info("Staring heartbeat monitoring period")
+        signal.alarm(t_global.heartbeat_timeout)
+
+
+    return RC_SUCCESS
+
+def do_timeout():
+    '''Handle a roadblock timeout event'''
+
+    t_global.log.critical("Roadblock failed with timeout")
+
+    timeout_internals()
+
     sys.exit(RC_TIMEOUT)
 
 
-def sighandler(signum, frame):
-    '''Handle signals delivered to the process'''
+def timeout_signal_handler(signum, frame):
+    '''Handle roadblock timeout signals delivered to the process'''
 
     if signum == 14: # SIGALRM
         t_global.alarm_active = False
         do_timeout()
     else:
-        t_global.log.info("Signal handler called with signal %d", signum)
+        t_global.log.info("Timeout Signal handler called with signal %d", signum)
+
+    return RC_SUCCESS
+
+def heartbeat_signal_handler(signum, frame):
+    '''Handle heartbeat timeout signals delivered to the process'''
+
+    if signum == 14: # SIGALRM
+        t_global.alarm_active = False
+        do_heartbeat_timeout()
+    else:
+        t_global.log.info("Heartbeat Signal handler called with signal %d", signum)
 
     return RC_SUCCESS
 
@@ -1103,6 +1244,8 @@ def main():
             t_global.followers["online"][follower] = True
             t_global.followers["ready"][follower] = True
             t_global.followers["gone"][follower] = True
+            t_global.followers["waiting"][follower] = True
+            t_global.followers["waiting_backup"][follower] = True
 
     if t_global.args.roadblock_role == "follower":
         t_global.my_id = t_global.args.roadblock_follower_id
@@ -1138,7 +1281,7 @@ def main():
 
     # define a signal handler that will respond to SIGALRM when a
     # timeout even occurs
-    signal.signal(signal.SIGALRM, sighandler)
+    signal.signal(signal.SIGALRM, timeout_signal_handler)
 
     mytime = calendar.timegm(time.gmtime())
     t_global.log.info("Current Time: %s", datetime.datetime.utcfromtimestamp(mytime).strftime("%Y-%m-%d at %H:%M:%S UTC"))
