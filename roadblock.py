@@ -931,7 +931,8 @@ def backoff(attempts):
 def process_options ():
     '''Define the CLI argument parsing options'''
 
-    parser = argparse.ArgumentParser(description="Roadblock provides multi entity (system, vm, container, etc.) synchronization.")
+    parser = argparse.ArgumentParser(description = "Roadblock provides multi entity (system, vm, container, etc.) synchronization.",
+                                     formatter_class = argparse.ArgumentDefaultsHelpFormatter)
 
     parser.add_argument("--uuid",
                         dest = "roadblock_uuid",
