@@ -11,11 +11,12 @@ EXPECTED_LEADER_RC=0
 ABORT_TEST=0
 TIMEOUT_TEST=0
 WAIT_FOR_TEST=0
+WAIT_FOR_HEARTBEAT_TIMEOUT_TEST=0
 RANDOMIZE_INITIATOR=1
 #ROADBLOCK_DEBUG=" --log-level debug "
 ROADBLOCK_IMAGE_NAME=roadblock-client-test
 
-options=$(getopt -o "f:taw" --long "followers:,timeout,abort,wait-for" -- "$@")
+options=$(getopt -o "f:taw" --long "followers:,timeout,abort,wait-for,wait-for-heartbeat-timeout" -- "$@")
 if [ $? -eq 0 ]; then
     eval set -- "${options}"
 else
@@ -48,6 +49,11 @@ while true; do
         -w|--wait-for)
             WAIT_FOR_TEST=1
             echo -e "\nEnabling roadblock --wait-for test"
+            ;;
+        --wait-for-heartbeat-timeout)
+            WAIT_FOR_HEARTBEAT_TIMEOUT_TEST=1
+            EXPECTED_LEADER_RC=5
+            echo -e "\nEnabling roadblock --wait-for-heartbeat-timeout test"
             ;;
         --)
             shift
@@ -135,9 +141,13 @@ if pushd ${REPO_DIR} > /dev/null; then
                 echo -e "\nNot starting roadblock follower ${i} container due to timeout test"
 		continue
 	    fi
-            if [ "${WAIT_FOR_TEST}" == "1" ]; then
+            if [ "${WAIT_FOR_TEST}" == "1" -o "${WAIT_FOR_HEARTBEAT_TIMEOUT_TEST}" == "1" ]; then
                 WAIT_FOR_ARGS="--wait-for '/opt/roadblock/wait-for-script.sh 30' --wait-for-log /tmp/roadblock.wait-for.log"
                 WAIT_FOR_CHECK="echo -e \"\nRoadblock --wait-for Log:\"; cat /tmp/roadblock.wait-for.log;"
+            fi
+        elif [ "${i}" == "2" ]; then
+            if [ "${WAIT_FOR_HEARTBEAT_TIMEOUT_TEST}" == "1" ]; then
+                WAIT_FOR_ARGS="--simulate-heartbeat-timeout"
             fi
 	fi
 	SLEEP_TIME=$((RANDOM%20))

@@ -685,9 +685,9 @@ def message_handle (message):
         if t_global.args.roadblock_role == "follower":
             t_global.log.info("Received 'leader-heartbeat' message")
 
-            sent_heartbeat = False
-
-            if not sent_heartbeat:
+            if t_global.args.simulate_heartbeat_timeout:
+                t_global.log.critical("Not sending 'follower-heartbeat' because of heartbeat timeout simulation request")
+            else:
                 t_global.log.info("Sending 'follower-heartbeat' message")
                 message_publish(message_build("leader", t_global.args.roadblock_leader_id, "follower-heartbeat"))
     elif msg_command in ("follower-heartbeat", "follower-heartbeat-complete", "follower-heartbeat-complete-failed"):
@@ -1021,6 +1021,11 @@ def process_options ():
                         help = "Where to log the output from the --wait-for program/script",
                         default = None,
                         type = str)
+
+    parser.add_argument("--simulate-heartbeat-timeout",
+                        dest = "simulate_heartbeat_timeout",
+                        help = argparse.SUPPRESS,
+                        action = "store_true")
 
     t_global.args = parser.parse_args()
 
