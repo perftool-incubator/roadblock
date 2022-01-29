@@ -19,6 +19,8 @@ import subprocess
 import select
 import shlex
 import copy
+import base64
+import lzma
 
 from dataclasses import dataclass
 from pathlib import Path
@@ -32,6 +34,7 @@ RC_INVALID_INPUT=2
 RC_TIMEOUT=3
 RC_ABORT=4
 RC_HEARTBEAT_TIMEOUT=5
+RC_ABORT_WAITING=6
 
 # define some global variables
 @dataclass
@@ -45,6 +48,7 @@ class global_vars:
     con_watchdog_exit = None
     con_watchdog = None
     wait_for_cmd = None
+    wait_for_io_handler_exited = None
     wait_for_launcher_thread = None
     wait_for_process = None
     wait_for_monitor_thread = None
@@ -61,6 +65,7 @@ class global_vars:
     watch_busA = True
     watch_busB = False
     leader_abort = False
+    leader_abort_waiting = False
     roadblock_waiting = False
     follower_abort = False
     initiator_type = None
@@ -750,7 +755,7 @@ def message_handle (message):
                 disable_alarm()
 
                 if t_global.waiting_failed:
-                    t_global.leader_abort = True
+                    t_global.leader_abort_waiting = True
                     t_global.log.info("Sending 'all-abort' command")
                     message_publish(message_build("all", "all", "all-abort"))
                 else:
@@ -1232,6 +1237,8 @@ def connection_watchdog():
 def wait_for_process_io_handler():
     '''Handle the output logging of a --wait-for program/script process'''
 
+    t_global.wait_for_io_handler_exited = threading.Event()
+
     with open(t_global.args.wait_for_log, "w", encoding = "ascii") as wait_for_log_fh:
         # process lines while the process is running in a non-blocking fashion
         while t_global.wait_for_process.poll() is None:
@@ -1245,6 +1252,8 @@ def wait_for_process_io_handler():
         # (this will not block now so it is simpler than above)
         for line in t_global.wait_for_process.stdout:
             wait_for_log_fh.write(line)
+
+    t_global.wait_for_io_handler_exited.set()
 
     return RC_SUCCESS
 
@@ -1271,8 +1280,14 @@ def wait_for_process_monitor():
 
                 if t_global.wait_for_waiting:
                     if t_global.wait_for_process.returncode != 0:
-                        t_global.log.info("Sending 'follower-waiting-complete-failed' message")
-                        message_publish(message_build("leader", t_global.args.roadblock_leader_id, "follower-waiting-complete-failed"))
+                        t_global.wait_for_io_handler_exited.wait()
+
+                        log_contents = ""
+                        with open(t_global.args.wait_for_log, "r", encoding = "ascii") as wait_for_log_fh:
+                            log_contents = str(base64.b64encode(lzma.compress(wait_for_log_fh.read().encode("ascii"))), "ascii")
+
+                        t_global.log.critical("Sending 'follower-waiting-complete-failed' message")
+                        message_publish(message_build("leader", t_global.args.roadblock_leader_id, "follower-waiting-complete-failed", value = log_contents))
                     else:
                         t_global.log.info("Sending 'follower-waiting-complete' message")
                         message_publish(message_build("leader", t_global.args.roadblock_leader_id, "follower-waiting-complete"))
@@ -1592,8 +1607,11 @@ def main():
     cleanup()
 
     t_global.log.info("Exiting")
-    if t_global.leader_abort is True or t_global.follower_abort is True:
-        t_global.log.info("Roadblock Completed with an Abort")
+    if t_global.leader_abort_waiting:
+        t_global.log.critical("Roadblock Completed with a Waiting Abort")
+        return RC_ABORT_WAITING
+    if t_global.leader_abort or t_global.follower_abort:
+        t_global.log.critical("Roadblock Completed with an Abort")
         return RC_ABORT
     else:
         t_global.log.info("Roadblock Completed Successfully")
