@@ -8,7 +8,10 @@ done
 
 
 TIME=${1}
+RC=${2}
+
 RUNTIME=${TIME:-5}
+RETURN_CODE=${RC:-0}
 
 echo "Expected runtime: ${RUNTIME} seconds"
 
@@ -19,3 +22,5 @@ for i in $(seq 1 ${RUNTIME}); do
     echo "${i}: $(date -u)"
     sleep 1
 done
+
+exit ${RETURN_CODE}

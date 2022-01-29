@@ -48,3 +48,7 @@ jobs:
     - name: Run wait-for heartbeat timeout test
       run: |
         sudo ./test/run-test.sh --followers 5 --wait-for-heartbeat-timeout
+
+    - name: Run wait-for abort test
+      run: |
+        sudo ./test/run-test.sh --followers 5 --wait-for-abort

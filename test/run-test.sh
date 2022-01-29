@@ -11,12 +11,13 @@ EXPECTED_LEADER_RC=0
 ABORT_TEST=0
 TIMEOUT_TEST=0
 WAIT_FOR_TEST=0
+WAIT_FOR_ABORT_TEST=0
 WAIT_FOR_HEARTBEAT_TIMEOUT_TEST=0
 RANDOMIZE_INITIATOR=1
 #ROADBLOCK_DEBUG=" --log-level debug "
 ROADBLOCK_IMAGE_NAME=roadblock-client-test
 
-options=$(getopt -o "f:taw" --long "followers:,timeout,abort,wait-for,wait-for-heartbeat-timeout" -- "$@")
+options=$(getopt -o "f:taw" --long "followers:,timeout,abort,wait-for,wait-for-abort,wait-for-heartbeat-timeout" -- "$@")
 if [ $? -eq 0 ]; then
     eval set -- "${options}"
 else
@@ -49,6 +50,11 @@ while true; do
         -w|--wait-for)
             WAIT_FOR_TEST=1
             echo -e "\nEnabling roadblock --wait-for test"
+            ;;
+        --wait-for-abort)
+            WAIT_FOR_ABORT_TEST=1
+            EXPECTED_LEADER_RC=6
+            echo -e "\nEnabling roadblock --wait-for-abort test"
             ;;
         --wait-for-heartbeat-timeout)
             WAIT_FOR_HEARTBEAT_TIMEOUT_TEST=1
@@ -122,6 +128,7 @@ if pushd ${REPO_DIR} > /dev/null; then
 	 --timeout=${ROADBLOCK_TIMEOUT} --leader-id=${LEADER_ID} --message-log=${MESSAGE_LOG} --user-messages=/opt/roadblock/user-messages.json ${ROADBLOCK_DEBUG}; \
          RC=\$?; \
          echo -e \"\nRoadblock returned: \${RC}\"; \
+         if [ \"\${RC}\" == \"6\" ]; then  echo -e \"\nRoadblock waiting abort log:\n\n\"; jq --raw-output '.received[].payload.message | select(.command==\"follower-waiting-complete-failed\") | .value' ${MESSAGE_LOG} | base64 --decode | xz --decompress --stdout; fi; \
          echo -e \"\nRoadblock Message Log\"; cat ${MESSAGE_LOG}; \
          exit \${RC}"; then
 	echo "ERROR: Could not start the roadblock leader container"
@@ -141,8 +148,12 @@ if pushd ${REPO_DIR} > /dev/null; then
                 echo -e "\nNot starting roadblock follower ${i} container due to timeout test"
 		continue
 	    fi
+            WAIT_FOR_RC=0
+            if [ "${WAIT_FOR_ABORT_TEST}" == "1" ]; then
+                WAIT_FOR_RC=1
+            fi
             if [ "${WAIT_FOR_TEST}" == "1" -o "${WAIT_FOR_HEARTBEAT_TIMEOUT_TEST}" == "1" ]; then
-                WAIT_FOR_ARGS="--wait-for '/opt/roadblock/wait-for-script.sh 30' --wait-for-log /tmp/roadblock.wait-for.log"
+                WAIT_FOR_ARGS="--wait-for '/opt/roadblock/wait-for-script.sh 30 ${WAIT_FOR_RC}' --wait-for-log /tmp/roadblock.wait-for.log"
                 WAIT_FOR_CHECK="echo -e \"\nRoadblock --wait-for Log:\"; cat /tmp/roadblock.wait-for.log;"
             fi
         elif [ "${i}" == "2" ]; then
