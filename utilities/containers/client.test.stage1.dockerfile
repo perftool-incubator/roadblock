@@ -6,6 +6,8 @@ RUN yum update --assumeyes
 
 RUN yum install --assumeyes python39
 RUN yum install --assumeyes python3-pip
+RUN yum install --assumeyes jq
+RUN yum install --assumeyes xz
 
 RUN yum clean all
 

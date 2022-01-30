@@ -23,4 +23,5 @@ for i in $(seq 1 ${RUNTIME}); do
     sleep 1
 done
 
+echo "Exiting with return code = ${RETURN_CODE}"
 exit ${RETURN_CODE}
