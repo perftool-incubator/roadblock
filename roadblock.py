@@ -87,11 +87,11 @@ class global_vars:
     heartbeat_timeout = 30
     waiting_failed = False
 
-def set_alarm(time):
-    '''Set a SIGALRM to fire in `time` seconds'''
+def set_alarm(seconds):
+    '''Set a SIGALRM to fire in `seconds` seconds'''
 
-    signal.alarm(time)
-    t_global.alarm_ative = True
+    signal.alarm(seconds)
+    t_global.alarm_active = True
 
     return RC_SUCCESS
 
@@ -99,7 +99,7 @@ def disable_alarm():
     '''Disable an existing SIGALRM'''
 
     signal.alarm(0)
-    t_global.alarm_ative = True
+    t_global.alarm_active = True
 
     return RC_SUCCESS
 
@@ -581,7 +581,7 @@ def message_handle (message):
             t_global.log.info("The new timeout value is in %d seconds", abs(timeout))
             t_global.log.info("Timeout: %s", datetime.datetime.utcfromtimestamp(cluster_timeout).strftime("%Y-%m-%d at %H:%M:%S UTC"))
         else:
-            disable_alarm(0)
+            disable_alarm()
             t_global.log.critical("The timeout has already occurred")
             return RC_TIMEOUT
     elif msg_command == "switch-buses":
@@ -1156,7 +1156,7 @@ def do_heartbeat_signal():
         message_publish(message_build("all", "all", "heartbeat-timeout"))
 
         timeout_internals()
-            
+
         sys.exit(RC_HEARTBEAT_TIMEOUT)
     else:
         t_global.log.info("Successfully ending current heartbeat monitoring period")
