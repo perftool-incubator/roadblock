@@ -781,7 +781,7 @@ def message_handle (message):
                 t_global.follower_abort = True
 
                 if t_global.args.wait_for is not None and t_global.wait_for_process is not None:
-                    t_global.log.critical("Killing wait_for process")
+                    t_global.log.critical("Killing wait_for process due to 'all-abort' from leader")
                     t_global.wait_for_process.kill()
 
             # tell the leader that I'm gone
@@ -1056,6 +1056,8 @@ def process_options ():
 def cleanup():
     '''Cleanup the roadblock before exiting'''
 
+    t_global.log.info("Cleaning up")
+
     if t_global.alarm_active:
         t_global.log.info("Disabling timeout alarm")
         disable_alarm()
@@ -1112,10 +1114,10 @@ def timeout_internals():
     if t_global.args.wait_for is not None:
         if t_global.wait_for_process is not None:
             if t_global.wait_for_process.poll() is None:
-                t_global.log.critical("Killing wait_for process")
+                t_global.log.critical("Killing wait_for process due to timeout")
                 t_global.wait_for_process.kill()
             else:
-                t_global.log.info("wait_for process has already exited")
+                t_global.log.debug("wait_for process has already exited")
         else:
             t_global.log.critical("The wait-for process object is missing")
 
@@ -1260,22 +1262,22 @@ def wait_for_process_io_handler():
 def wait_for_process_monitor():
     '''Monitor the status of a --wait-for program/script process'''
 
-    t_global.log.info("wait_for monitor is waiting")
+    t_global.log.debug("The wait_for monitor is waiting to start")
 
     t_global.wait_for_monitor_start.wait()
 
-    t_global.log.info("wait_for monitor is starting")
+    t_global.log.debug("The wait_for monitor is starting")
 
     while not t_global.wait_for_monitor_exit.is_set():
         if t_global.wait_for_process is None:
-            t_global.log.critical("There is no wait_process to monitor")
+            t_global.log.critical("There is no wait_for_process to monitor")
             t_global.wait_for_monitor_exit.set()
         else:
             if t_global.wait_for_process.poll() is None:
-                #t_global.log.info("wait_for process is still running")
+                t_global.log.debug("The wait_for_process is still running")
                 time.sleep(1)
             else:
-                t_global.log.info("wait_for process is complete")
+                t_global.log.info("The wait_for process has finished")
                 t_global.wait_for_monitor_exit.set()
 
                 if t_global.wait_for_waiting:
@@ -1292,7 +1294,7 @@ def wait_for_process_monitor():
                         t_global.log.info("Sending 'follower-waiting-complete' message")
                         message_publish(message_build("leader", t_global.args.roadblock_leader_id, "follower-waiting-complete"))
 
-    t_global.log.info("wait_for monitor is exiting")
+    t_global.log.debug("The wait_for monitor is exiting")
 
     return RC_SUCCESS
 
@@ -1309,10 +1311,12 @@ def wait_for_process_launcher():
                                                      stderr = subprocess.STDOUT)
 
         if t_global.wait_for_process is None:
-            t_global.log.critical("The wait for process failed to launch")
+            t_global.log.critical("The wait_for process failed to launch")
             ret_val = 1
             t_global.wait_for_monitor_start.set()
         else:
+            t_global.log.info("The wait-for process is now running")
+
             t_global.wait_for_monitor_start.set()
             wait_for_io_thread = threading.Thread(target = wait_for_process_io_handler, args = ())
             wait_for_io_thread.start()
@@ -1325,7 +1329,7 @@ def wait_for_process_launcher():
         ret_val = 1
         t_global.wait_for_monitor_start.set()
 
-    t_global.log.info("wait_for process exited with return code %d", ret_val)
+    t_global.log.info("The wait_for process exited with return code %d", ret_val)
 
     return RC_SUCCESS
 
@@ -1396,12 +1400,17 @@ def main():
     t_global.log.info("Current Time: %s", datetime.datetime.utcfromtimestamp(mytime).strftime("%Y-%m-%d at %H:%M:%S UTC"))
 
     if t_global.args.wait_for is not None:
+        t_global.log.info("Wait-For: True")
+        t_global.log.info("Wait-For Task: %s", t_global.args.wait_for)
+        t_global.log.info("Wait-For Log: %s", t_global.args.wait_for_log)
         t_global.wait_for_monitor_start = threading.Event()
         t_global.wait_for_launcher_thread = threading.Thread(target = wait_for_process_launcher, args = ())
         t_global.wait_for_monitor_thread = threading.Thread(target = wait_for_process_monitor, args = ())
         t_global.wait_for_monitor_exit = threading.Event()
         t_global.wait_for_launcher_thread.start()
         t_global.wait_for_monitor_thread.start()
+    else:
+        t_global.log.info("Wait-For: False")
 
     # set the default timeout alarm
     set_alarm(t_global.args.roadblock_timeout)
@@ -1603,7 +1612,6 @@ def main():
                     if ret_val:
                         return ret_val
 
-    t_global.log.info("Cleaning up")
     cleanup()
 
     t_global.log.info("Exiting")
