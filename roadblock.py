@@ -426,8 +426,6 @@ def define_msg_schema():
                                     "follower-ready-waiting",
                                     "leader-heartbeat",
                                     "follower-heartbeat",
-                                    "follower-heartbeat-complete",
-                                    "follower-heartbeat-complete-failed",
                                     "follower-waiting-complete",
                                     "follower-waiting-complete-failed",
                                     "heartbeat-timeout",
@@ -695,32 +693,19 @@ def message_handle (message):
             else:
                 t_global.log.info("Sending 'follower-heartbeat' message")
                 message_publish(message_build("leader", t_global.args.roadblock_leader_id, "follower-heartbeat"))
-    elif msg_command in ("follower-heartbeat", "follower-heartbeat-complete", "follower-heartbeat-complete-failed"):
+    elif msg_command  == "follower-heartbeat":
         if t_global.args.roadblock_role == "leader":
             t_global.log.info("Received '%s' message", msg_command)
 
             msg_sender = message_get_sender(message)
 
-            if msg_command in ("follower-heartbeat-complete", "follower-heartbeat-complete-failed"):
-                if msg_sender in t_global.followers["busy_waiting"]:
-                    t_global.log.info("Received heartbeat from follower '%s' and removing from the busy waiting list", msg_sender)
-                    del t_global.followers["busy_waiting"][msg_sender]
-                    del t_global.followers["waiting"][msg_sender]
-
-                    if msg_command == "follower-heartbeat-complete-failed":
-                        t_global.waiting_failed = True
-                elif msg_sender in t_global.args.roadblock_followers:
-                    t_global.log.warning("Received '%s' from a follower '%s' that is not busy waiting?", msg_command, msg_sender)
-                else:
-                    t_global.log.info("Received '%s' message from an unknown follower '%s'", msg_command, msg_sender)
-            elif msg_command == "follower-heartbeat":
-                if msg_sender in t_global.followers["waiting"]:
-                    t_global.log.info("Received heartbeat from follower '%s'", msg_sender)
-                    del t_global.followers["waiting"][msg_sender]
-                elif msg_sender in t_global.args.roadblock_followers:
-                    t_global.log.warning("Received a redundant heartbeat message from follower '%s'?", msg_sender)
-                else:
-                    t_global.log.warning("Received a heartbeat message from an unknown follower '%s'", msg_sender)
+            if msg_sender in t_global.followers["waiting"]:
+                t_global.log.info("Received heartbeat from follower '%s'", msg_sender)
+                del t_global.followers["waiting"][msg_sender]
+            elif msg_sender in t_global.args.roadblock_followers:
+                t_global.log.warning("Received a redundant heartbeat message from follower '%s'?", msg_sender)
+            else:
+                t_global.log.warning("Received a heartbeat message from an unknown follower '%s'", msg_sender)
 
             if len(t_global.followers["busy_waiting"]) == 0 and len(t_global.followers["waiting"]) == 0:
                 t_global.log.info("Disabling heartbeat timeout")
