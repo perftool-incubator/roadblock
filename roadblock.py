@@ -673,7 +673,7 @@ def message_handle (message):
                     t_global.log.info("Sending 'leader-heartbeat' message")
                     message_publish(message_build("all", "all", "leader-heartbeat"))
 
-                    t_global.log.info("Staring heartbeat monitoring period")
+                    t_global.log.info("Starting heartbeat monitoring period")
                     set_alarm(t_global.heartbeat_timeout)
                 else:
                     t_global.log.info("Sending 'all-go' command")
