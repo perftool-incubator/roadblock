@@ -1128,7 +1128,7 @@ def timeout_internals():
             if len(t_global.followers["waiting"]) != 0:
                 t_global.log.critical("These followers did not respond to the heartbeat and were still 'waiting': %s", get_followers_list(t_global.followers["waiting"]))
         elif len(t_global.followers["gone"]) != 0:
-            t_global.log.critical("These followers never reach 'gone': %s", get_followers_list(t_global.followers["gone"]))
+            t_global.log.critical("These followers never reached 'gone': %s", get_followers_list(t_global.followers["gone"]))
 
     return RC_SUCCESS
 
