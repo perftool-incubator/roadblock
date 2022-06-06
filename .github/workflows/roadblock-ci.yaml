@@ -40,3 +40,15 @@ jobs:
     - name: Run large roadblock test
       run: |
         sudo ./test/run-test.sh --followers 50
+
+    - name: Run wait-for test
+      run: |
+        sudo ./test/run-test.sh --followers 5 --wait-for
+
+    - name: Run wait-for heartbeat timeout test
+      run: |
+        sudo ./test/run-test.sh --followers 5 --wait-for-heartbeat-timeout
+
+    - name: Run wait-for abort test
+      run: |
+        sudo ./test/run-test.sh --followers 5 --wait-for-abort
