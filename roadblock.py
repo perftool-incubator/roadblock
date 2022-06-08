@@ -623,6 +623,7 @@ def message_handle (message):
                 message_publish(message_build("leader", t_global.args.roadblock_leader_id, "follower-ready-abort"))
             else:
                 if t_global.args.wait_for is not None and t_global.wait_for_process is not None and t_global.wait_for_process.poll() is None:
+                    t_global.wait_for_waiting = True
                     t_global.log.info("Sending 'follower-ready-waiting' message")
                     message_publish(message_build("leader", t_global.args.roadblock_leader_id, "follower-ready-waiting"))
                 else:
@@ -679,8 +680,6 @@ def message_handle (message):
     elif msg_command == "all-wait":
         if t_global.args.roadblock_role == "follower":
             t_global.log.info("Received 'all-wait' message")
-
-            t_global.wait_for_waiting = True
 
             t_global.log.info("Disabling original timeout")
             disable_alarm()
