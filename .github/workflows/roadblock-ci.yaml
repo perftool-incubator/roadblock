@@ -5,6 +5,10 @@ on:
     branches: [ master ]
   workflow_dispatch:
 
+concurrency:
+  group: ${{ github.ref }}/roadblock-ci
+  cancel-in-progress: true
+
 jobs:
   roadblock-ci:
     runs-on: ubuntu-latest
