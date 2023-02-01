@@ -1,4 +1,4 @@
-name: Pylint
+name: pylint
 
 on:
   pull_request:
@@ -10,7 +10,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  build:
+  pylint:
 
     runs-on: ubuntu-latest
 
