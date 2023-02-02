@@ -1,4 +1,4 @@
-name: faux-crucible-ci
+name: faux-roadblock-ci
 
 on:
   pull_request:
@@ -12,5 +12,7 @@ on:
     - 'docs/**'
 
 jobs:
-  call-core-crucible-ci:
-    uses: perftool-incubator/crucible-ci/.github/workflows/faux-core-crucible-ci.yaml@main
+  roadblock-ci:
+    runs-on: ubuntu-latest
+    steps:
+    - run: 'echo "No build required" '
