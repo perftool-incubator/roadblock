@@ -1,0 +1,18 @@
+name: faux-roadblock-ci
+
+on:
+  pull_request:
+    branches: [ master ]
+    paths:
+    - LICENSE
+    - '**.md'
+    - .github/workflows/faux-crucible-ci.yaml
+    - .github/workflows/faux-roadblock-ci.yaml
+    - .github/workflows/faux-pylint.yaml
+    - 'docs/**'
+
+jobs:
+  roadblock-ci:
+    runs-on: ubuntu-latest
+    steps:
+    - run: 'echo "No build required" '
