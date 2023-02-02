@@ -1,8 +1,15 @@
-name: Pylint
+name: pylint
 
 on:
   pull_request:
     branches: [ master ]
+    paths-ignore:
+    - LICENSE
+    - '**.md'
+    - .github/workflows/faux-crucible-ci.yaml
+    - .github/workflows/faux-roadblock-ci.yaml
+    - .github/workflows/faux-pylint.yaml
+    - 'docs/**'
   workflow_dispatch:
 
 concurrency:
@@ -10,7 +17,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  build:
+  pylint:
 
     runs-on: ubuntu-latest
 
