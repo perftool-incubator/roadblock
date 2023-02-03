@@ -820,6 +820,8 @@ def message_publish(message):
             t_global.log.warning("Failed attempt %d to publish message '%s'", counter, message)
 
             backoff(counter)
+        else:
+            t_global.log.debug("Message '%s' was received by %d clients on the %d attempt", message, ret_val, counter)
 
     if t_global.message_log is not None:
         # if the message log is open then append messages to the queue
