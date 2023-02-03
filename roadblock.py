@@ -1212,13 +1212,16 @@ def connection_watchdog():
         time.sleep(1)
         try:
             if t_global.con_pool_state:
+                ping_begin = time.time_ns()
                 t_global.redcon.ping()
+                ping_end = time.time_ns()
+                t_global.log.debug("Connection watchdog ping succeeded in %f milliseconds", ((ping_end - ping_begin) / (10 ** 6)))
             else:
-                t_global.log.error("con_pool_state=False")
+                t_global.log.error("Connection watchdog ping skipped due to disconnected state")
         except redis.exceptions.ConnectionError as con_error:
             t_global.con_pool_state = False
             t_global.log.error("%s", con_error)
-            t_global.log.error("Redis connection failed")
+            t_global.log.error("Connection watchdog ping failed")
 
     return RC_SUCCESS
 
