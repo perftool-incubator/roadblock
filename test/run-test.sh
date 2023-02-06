@@ -14,7 +14,7 @@ WAIT_FOR_TEST=0
 WAIT_FOR_ABORT_TEST=0
 WAIT_FOR_HEARTBEAT_TIMEOUT_TEST=0
 RANDOMIZE_INITIATOR=1
-#ROADBLOCK_DEBUG=" --log-level debug "
+ROADBLOCK_DEBUG=" --log-level debug "
 ROADBLOCK_IMAGE_NAME=roadblock-client-test
 
 options=$(getopt -o "f:taw" --long "followers:,timeout,abort,wait-for,wait-for-abort,wait-for-heartbeat-timeout" -- "$@")
