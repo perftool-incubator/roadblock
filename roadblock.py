@@ -86,6 +86,7 @@ class global_vars:
     log = None
     heartbeat_timeout = 30
     waiting_failed = False
+    sigint_counter = 0
 
 def set_alarm(seconds):
     '''Set a SIGALRM to fire in `seconds` seconds'''
@@ -1197,9 +1198,16 @@ def sigint_handler(signum, frame):
     '''Handle a SIGINT/CTRL-C'''
 
     if signum == 2: # SIGINT
-        t_global.log.critical("Exiting due to SIGINT")
-        cleanup()
-        sys.exit(RC_ERROR)
+        t_global.log.warning("Caught SIGINT signal")
+        t_global.sigint_counter += 1
+
+        if t_global.sigint_counter > 1:
+            t_global.log.critical("Exiting due to SIGINT being received more than 1 time")
+            cleanup()
+            sys.exit(RC_ERROR)
+        else:
+            t_global.log.warning("SIGINT has been received once -> attempting to abort")
+            t_global.leader_abort = True
     else:
         t_global.log.info("SIGINT Signal handler called with signal %d", signum)
 
