@@ -16,8 +16,9 @@ WAIT_FOR_HEARTBEAT_TIMEOUT_TEST=0
 RANDOMIZE_INITIATOR=1
 ROADBLOCK_DEBUG=" --log-level debug "
 ROADBLOCK_IMAGE_NAME=roadblock-client-test
+LEADER_SIGINT_TEST=0
 
-options=$(getopt -o "f:taw" --long "followers:,timeout,abort,wait-for,wait-for-abort,wait-for-heartbeat-timeout" -- "$@")
+options=$(getopt -o "f:taw" --long "followers:,timeout,abort,wait-for,wait-for-abort,wait-for-heartbeat-timeout,leader-sigints:" -- "$@")
 if [ $? -eq 0 ]; then
     eval set -- "${options}"
 else
@@ -27,6 +28,23 @@ fi
 
 while true; do
     case "${1}" in
+        --leader-sigints)
+            shift
+            LEADER_SIGINT_TEST=${1}
+            if ! echo "${LEADER_SIGINT_TEST}" | grep -q '^[1-9][0-9]*$'; then
+                echo "invalid leader sigints argument [${LEADER_SIGINT_TEST}]"
+                exit 1
+            else
+                echo -e "\nSetting LEADER_SIGINT_TEST=${LEADER_SIGINT_TEST}"
+                if [ ${LEADER_SIGINT_TEST} -eq 1 ]; then
+                    # a single SIGINT results in an abort
+                    EXPECTED_LEADER_RC=4
+                else
+                    # multiple SIGINTs results in an immediate/generic error exit
+                    EXPECTED_LEADER_RC=1
+                fi
+            fi
+            ;;
         -f|--followers)
             shift
             NUM_FOLLOWERS=${1}
@@ -120,7 +138,11 @@ if pushd ${REPO_DIR} > /dev/null; then
     # start the roadblock leader container
     echo -e "\nStarting the roadblock leader container"
     SLEEP_TIME=0
-    if [ "${RANDOMIZE_INITIATOR}" == "1" ]; then
+    if [ "${RANDOMIZE_INITIATOR}" == "1" -a ${LEADER_SIGINT_TEST} -eq 0 ]; then
+        # don't randomize the container startup if doing a SIGINT test
+        # so that we can be sure that we know when a container is
+        # alive to send it a signal
+
 	SLEEP_TIME=$((RANDOM%20))
     fi
     if ! podman run --detach=true --interactive=true --tty=true --name=roadblock_leader --pod=${POD_NAME} localhost/${ROADBLOCK_IMAGE_NAME} -c \
@@ -133,6 +155,23 @@ if pushd ${REPO_DIR} > /dev/null; then
          exit \${RC}"; then
 	echo "ERROR: Could not start the roadblock leader container"
 	exit 5
+    fi
+
+    # perform a leader SIGINT test by sending SIGINT to the leader pod
+    if [ ${LEADER_SIGINT_TEST} -gt 0 ]; then
+        # ensure that the pod is initialized by waiting a bit
+        sleep 10
+
+        SIGNALS_SENT=0
+        while [ ${SIGNALS_SENT} -lt ${LEADER_SIGINT_TEST} ]; do
+            echo -e "\nSending SIGINT to roadblock leader process"
+            if ! pkill --signal INT --full 'roadblock\.py.*role=leader'; then
+                echo "ERROR: Failed to send SIGINT to the roadblock leader process"
+                exit 13
+            fi
+            (( SIGNALS_SENT += 1 ))
+            sleep 1
+        done
     fi
 
     # start the roadblock follower container(s)
