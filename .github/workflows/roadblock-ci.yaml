@@ -63,3 +63,11 @@ jobs:
     - name: Run wait-for abort test
       run: |
         sudo ./test/run-test.sh --followers 5 --wait-for-abort
+
+    - name: Run 1 Leader SIGINT (abort) test
+      run: |
+        sudo ./test/run-test.sh --followers 5 --leader-sigints 1
+
+    - name: Run 2 Leader SIGINT (exit) test
+      run: |
+        sudo ./test/run-test.sh --followers 5 --leader-sigints 2
