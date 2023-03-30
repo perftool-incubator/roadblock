@@ -146,7 +146,7 @@ if pushd ${REPO_DIR} > /dev/null; then
 	SLEEP_TIME=$((RANDOM%20))
     fi
     if ! podman run --detach=true --interactive=true --tty=true --name=roadblock_leader --pod=${POD_NAME} localhost/${ROADBLOCK_IMAGE_NAME} -c \
-	 "sleep ${SLEEP_TIME}; /opt/roadblock/roadblock.py --uuid=${ROADBLOCK_UUID} --role=leader --redis-server=${REDIS_IP_ADDRESS} --redis-password=${REDIS_PASSWORD} ${FOLLOWERS} \
+	 "sleep ${SLEEP_TIME}; /opt/roadblock/roadblocker.py --uuid=${ROADBLOCK_UUID} --role=leader --redis-server=${REDIS_IP_ADDRESS} --redis-password=${REDIS_PASSWORD} ${FOLLOWERS} \
 	 --timeout=${ROADBLOCK_TIMEOUT} --leader-id=${LEADER_ID} --message-log=${MESSAGE_LOG} --user-messages=/opt/roadblock/user-messages.json ${ROADBLOCK_DEBUG}; \
          RC=\$?; \
          echo -e \"\nRoadblock returned: \${RC}\"; \
@@ -165,7 +165,7 @@ if pushd ${REPO_DIR} > /dev/null; then
         SIGNALS_SENT=0
         while [ ${SIGNALS_SENT} -lt ${LEADER_SIGINT_TEST} ]; do
             echo -e "\nSending SIGINT to roadblock leader process"
-            if ! pkill --signal INT --full 'roadblock\.py.*role=leader'; then
+            if ! pkill --signal INT --full 'roadblocker\.py.*role=leader'; then
                 echo "ERROR: Failed to send SIGINT to the roadblock leader process"
                 exit 13
             fi
@@ -203,7 +203,7 @@ if pushd ${REPO_DIR} > /dev/null; then
 	SLEEP_TIME=$((RANDOM%20))
 	echo -e "\nStarting the roadblock follower ${i} container with a sleep ${SLEEP_TIME}"
 	if ! podman run --detach --interactive=true --tty=true --name=${FOLLOWER_PREFIX}_${i} --pod=${POD_NAME} localhost/${ROADBLOCK_IMAGE_NAME} -c \
-	     "sleep ${SLEEP_TIME}; /opt/roadblock/roadblock.py --uuid=${ROADBLOCK_UUID} --role=follower --follower-id=${FOLLOWER_PREFIX}_${i} --redis-server=${REDIS_IP_ADDRESS} \
+	     "sleep ${SLEEP_TIME}; /opt/roadblock/roadblocker.py --uuid=${ROADBLOCK_UUID} --role=follower --follower-id=${FOLLOWER_PREFIX}_${i} --redis-server=${REDIS_IP_ADDRESS} \
 	     --redis-password=${REDIS_PASSWORD} --timeout=${ROADBLOCK_TIMEOUT} --leader-id=${LEADER_ID} --message-log=${MESSAGE_LOG} --user-messages=/opt/roadblock/user-messages.json ${ROADBLOCK_DEBUG} ${ABORT} ${WAIT_FOR_ARGS}; \
              RC=\$?; \
              echo -e \"\nRoadblock returned: \${RC}\"; \
