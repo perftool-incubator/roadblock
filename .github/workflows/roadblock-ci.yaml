@@ -17,10 +17,38 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  roadblock-ci:
+  roadblock-ci-tests:
     runs-on: ubuntu-latest
 
+    strategy:
+      fail-fast: false
+      matrix:
+        tests:
+        - name: "Run small roadblock test"
+          args: "--followers 5"
+        - name: "Run roadblock timeout test"
+          args: "--followers 5 --timeout"
+        - name: "Run roadblock abort test"
+          args: "--followers 5 --abort"
+        - name: "Run large roadblock test"
+          args: "--followers 50"
+        - name: "Run wait-for test"
+          args: "--followers 5 --wait-for"
+        - name: "Run wait-for heartbeat timeout test"
+          args: "--followers 5 --wait-for-heartbeat-timeout"
+        - name: "Run wait-for abort test"
+          args: "--followers 5 --wait-for-abort"
+        - name: "Run 1 Leader SIGINT (abort) test"
+          args: "--followers 5 --leader-sigints 1"
+        - name: "Run 2 Leader SIGINT (exit) test"
+          args: "--followers 5 --leader-sigints 2"
+
     steps:
+    - name: Matrix Parameters => ("${{ matrix.tests.name }}", "${{ matrix.tests.args }}")
+      run: |
+        echo "name=\"${{ matrix.tests.name }}\""
+        echo "args=\"${{ matrix.tests.args }}\""
+
     - uses: actions/checkout@v3
 
     - name: Install test dependencies
@@ -36,38 +64,16 @@ jobs:
       run: |
         sudo ./test/build-container.sh
 
-    - name: Run small roadblock test
+    - name: ${{ matrix.tests.name }}
       run: |
-        sudo ./test/run-test.sh --followers 5
+        sudo ./test/run-test.sh ${{ matrix.tests.args }}
 
-    - name: Run roadblock timeout test
-      run: |
-        sudo ./test/run-test.sh --followers 5 --timeout
+  roadblock-ci-complete:
+    runs-on: ubuntu-latest
 
-    - name: Run roadblock abort test
-      run: |
-        sudo ./test/run-test.sh --followers 5 --abort
+    needs:
+    - roadblock-ci-tests
 
-    - name: Run large roadblock test
-      run: |
-        sudo ./test/run-test.sh --followers 50
-
-    - name: Run wait-for test
-      run: |
-        sudo ./test/run-test.sh --followers 5 --wait-for
-
-    - name: Run wait-for heartbeat timeout test
-      run: |
-        sudo ./test/run-test.sh --followers 5 --wait-for-heartbeat-timeout
-
-    - name: Run wait-for abort test
-      run: |
-        sudo ./test/run-test.sh --followers 5 --wait-for-abort
-
-    - name: Run 1 Leader SIGINT (abort) test
-      run: |
-        sudo ./test/run-test.sh --followers 5 --leader-sigints 1
-
-    - name: Run 2 Leader SIGINT (exit) test
-      run: |
-        sudo ./test/run-test.sh --followers 5 --leader-sigints 2
+    steps:
+    - name: Confirm Success
+      run: echo "roadblock-ci-complete"

@@ -1,12 +1,19 @@
+'''module for roadblock capabilities'''
+
 class roadblock:
     '''roadblock object class'''
-    
-    def __init__(self, foo):
+
+    def __init__(self, myvar):
         '''roadblock object initiator function'''
 
-        self.foo = foo
+        self.myvar = myvar
 
-    def get_foo(self):
+    def get_myvar(self):
         '''roadblock object accessor function'''
-        
-        return(self.foo)
+
+        return self.myvar
+
+    def set_myvar(self, tmpvar):
+        '''roadblock object set function'''
+
+        self.myvar = tmpvar
