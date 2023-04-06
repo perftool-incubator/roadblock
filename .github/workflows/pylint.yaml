@@ -35,5 +35,5 @@ jobs:
         pip install jsonschema
     - name: Analysing the code with pylint
       run: |
-        python_files=$(find . -name "*.py" -and -not -name "roadblocker.py")
+        python_files=$(find . -name "*.py")
         pylint --disable=line-too-long --disable=too-many-lines --disable=too-many-return-statements --disable=too-many-branches --disable=too-many-statements --disable=too-many-branches --disable=too-many-nested-blocks --disable=no-else-return --disable=too-many-arguments --disable=unused-argument --disable=invalid-name --disable=too-many-instance-attributes --disable=consider-using-with ${python_files}
