@@ -151,7 +151,7 @@ if pushd ${REPO_DIR} > /dev/null; then
          RC=\$?; \
          echo -e \"\nRoadblock returned: \${RC}\"; \
          if [ \"\${RC}\" == \"6\" ]; then  echo -e \"\nRoadblock waiting abort log:\n\"; jq --raw-output '.received[].payload.message | select(.command==\"follower-waiting-complete-failed\") | .value' ${MESSAGE_LOG} | base64 --decode | xz --decompress --stdout; fi; \
-         echo -e \"\nRoadblock Message Log:\n\"; cat ${MESSAGE_LOG}; \
+         echo -e \"\nRoadblock Message Log Details:\n\"; ls -l ${MESSAGE_LOG}; wc ${MESSAGE_LOG}; \
          exit \${RC}"; then
 	echo "ERROR: Could not start the roadblock leader container"
 	exit 5
@@ -208,7 +208,7 @@ if pushd ${REPO_DIR} > /dev/null; then
              RC=\$?; \
              echo -e \"\nRoadblock returned: \${RC}\"; \
              ${WAIT_FOR_CHECK} \
-             echo -e \"\nRoadblock Message Log:\n\"; cat ${MESSAGE_LOG};"; then
+             echo -e \"\nRoadblock Message Log Details:\n\"; ls -l ${MESSAGE_LOG}; wc ${MESSAGE_LOG};"; then
 	    echo "ERROR: Could not start roadblock follower ${i}"
 	    echo "       This will cause a timeout to occur"
 	fi
@@ -226,13 +226,17 @@ if pushd ${REPO_DIR} > /dev/null; then
     echo
 
     # get the roadblock leader container log
-    echo -e "\nOutput from the roadblock leader:"
+    echo -e "\nNormal Output from the roadblock leader:"
+    podman logs roadblock_leader | grep -v "\[CODE\]\|\[   DEBUG\]"
+    echo -e "\nDebug Output from the roadblock leader:"
     podman logs roadblock_leader
 
     # get the roadblock follower container(s) log
     echo -e "\nOutput from the roadblock follower(s):"
     for i in $(seq 1 ${NUM_FOLLOWERS}); do
-	echo -e "\nFollower ${i}:"
+	echo -e "\nFollower ${i} Normal Output:"
+	podman logs ${FOLLOWER_PREFIX}_${i} | grep -v "\[CODE\]\|\[   DEBUG\]"
+	echo -e "\nFollower ${i} Debug Output:"
 	podman logs ${FOLLOWER_PREFIX}_${i}
     done
 

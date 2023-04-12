@@ -24,7 +24,7 @@ class roadblock:
     '''roadblock object class'''
 
     # log formatting variables
-    log_debug_format =  '[%(module)s %(funcName)s:%(lineno)d]\n[%(asctime)s][%(levelname) 8s] %(message)s'
+    log_debug_format =  '[CODE][%(module)s %(funcName)s:%(lineno)d]\n[%(asctime)s][%(levelname) 8s] %(message)s'
     log_normal_format = '[%(asctime)s][%(levelname) 8s] %(message)s'
 
     # return code variables
