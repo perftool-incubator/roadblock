@@ -49,7 +49,7 @@ jobs:
         echo "name=\"${{ matrix.tests.name }}\""
         echo "args=\"${{ matrix.tests.args }}\""
 
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
 
     - name: Install test dependencies
       run: |
