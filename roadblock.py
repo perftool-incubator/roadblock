@@ -75,14 +75,11 @@ class roadblock:
     wait_for_monitor_start = None
     wait_for_waiting = False
     redcon = None
-    pubsubcon = None
     initiator = False
-    mirror_busB = False
     schema = None
     user_schema = None
     my_id = None
-    watch_busA = True
-    watch_busB = False
+    watch_bus = True
     leader_abort = False
     leader_abort_waiting = False
     roadblock_waiting = False
@@ -738,11 +735,6 @@ class roadblock:
                 self.disable_alarm()
                 self.logger.critical("The timeout has already occurred")
                 return self.RC_TIMEOUT
-        elif msg_command == "switch-buses":
-            self.logger.debug("switching busses")
-
-            self.watch_busA = False
-            self.watch_busB = True
         elif msg_command == "leader-online":
             if self.roadblock_role == "follower":
                 self.logger.debug("I see that the leader is online")
@@ -762,12 +754,10 @@ class roadblock:
                     self.logger.info("Sending 'all-online' message")
                     self.message_publish(self.message_build("all", "all", "all-online"))
                     if self.initiator:
-                        self.mirror_busB = False
                         self.send_user_messages()
         elif msg_command == "all-online":
             if self.initiator:
                 self.logger.info("Initiator received 'all-online' message")
-                self.mirror_busB = False
             else:
                 self.logger.info("Received 'all-online' message")
 
@@ -910,7 +900,7 @@ class roadblock:
                 self.timeout_internals()
 
                 # signal myself to exit
-                self.watch_busB = False
+                self.watch_bus = False
 
                 self.rc = self.RC_HEARTBEAT_TIMEOUT
                 return self.rc
@@ -933,7 +923,7 @@ class roadblock:
                 self.message_publish(self.message_build("leader", self.roadblock_leader_id, "follower-gone"))
 
                 # signal myself to exit
-                self.watch_busB = False
+                self.watch_bus = False
         elif msg_command == "follower-gone":
             if self.roadblock_role == "leader":
                 self.logger.debug("leader got a 'follower-gone' message")
@@ -955,7 +945,7 @@ class roadblock:
                     self.message_publish(self.message_build("all", "all", "all-gone"))
 
                     # signal myself to exit
-                    self.watch_busB = False
+                    self.watch_bus = False
         elif msg_command == "initiator-info":
             self.initiator_type = self.message_get_sender_type(message)
             self.initiator_id = self.message_get_sender(message)
@@ -966,8 +956,6 @@ class roadblock:
     def message_publish(self, message):
         '''Publish messages for subscribers to receive'''
 
-        message_str = self.message_to_str(message)
-
         ret_val = 0
         counter = 0
         while ret_val == 0:
@@ -976,16 +964,22 @@ class roadblock:
                 break
 
             counter += 1
-            # this call should return the number of clients that receive the message
-            # we expect it to be greater than zero, if not we retry
-            ret_val = self.redcon.publish(self.roadblock_uuid + "__busB", message_str)
 
-            if ret_val == 0:
+            try:
+                ret_val = self.redcon.xadd(self.roadblock_uuid + "__bus", { 'msg': self.message_to_str(message) })
+            except redis.exceptions.ConnectionError as con_error:
+                self.logger.error("%s", con_error)
+                self.logger.error("Bus add failed due to connection error!")
+            except redis.exceptions.TimeoutError as con_error:
+                self.logger.error("%s", con_error)
+                self.logger.error("Bus add failed due to a timeout error!")
+
+            if ret_val is None:
                 self.logger.warning("Failed attempt %d to publish message '%s'", counter, message)
 
                 self.backoff(counter)
             else:
-                self.logger.debug("Message '%s' was received by %d clients on the %d attempt", message, ret_val, counter)
+                self.logger.debug("Message '%s' was sent on the %d attempt with message ID '%s'", message, counter, ret_val)
 
         if self.message_log is not None:
             # if the message log is open then append messages to the queue
@@ -1117,7 +1111,15 @@ class roadblock:
                 self.logger.info("Removing db objects specific to this roadblock")
                 self.key_delete(self.roadblock_uuid)
                 self.key_delete(self.roadblock_uuid + "__initialized")
-                self.key_delete(self.roadblock_uuid + "__busA")
+
+                msg_count = self.redcon.xlen(self.roadblock_uuid + "__bus")
+                self.logger.debug("total messages on bus: %d", msg_count)
+
+                msgs_trimmed = self.redcon.xtrim(self.roadblock_uuid + "__bus", maxlen = 0, approximate = False)
+                self.logger.debug("total messages deleted from bus: %d", msgs_trimmed)
+
+                msg_count = self.redcon.xlen(self.roadblock_uuid + "__bus")
+                self.logger.debug("total messages on bus: %d", msg_count)
 
             self.logger.info("Closing connection pool watchdog")
             self.con_watchdog_exit.set()
@@ -1261,8 +1263,7 @@ class roadblock:
                 self.cleanup()
 
                 # signal myself to exit
-                self.watch_busA = False
-                self.watch_busB = False
+                self.watch_bus = False
 
                 self.rc = self.RC_ERROR
             else:
@@ -1532,22 +1533,12 @@ class roadblock:
             self.initiator = True
             self.logger.info("Initiator: True")
 
-            # set bus monitoring options
-            self.watch_busA = False
-            self.watch_busB = True
-            self.mirror_busB = True
-
-            # create busA
-            self.list_append(self.roadblock_uuid + "__busA", self.message_to_str(self.message_build("all", "all", "initialized")))
-
-            # create/subscribe to busB
-            self.pubsubcon.subscribe(self.roadblock_uuid + "__busB")
-
-            # publish the cluster timeout to busB
+            # publish the cluster timeout
+            # create the stream/bus by posting the timeout timestamp
             self.logger.info("Sending 'timeout-ts' message")
             self.message_publish(self.message_build("all", "all", "timeout-ts", cluster_timeout))
 
-            # publish the initiator information to busB
+            # publish the initiator information
             self.logger.info("Sending 'initiator-info' message")
             self.message_publish(self.message_build("all", "all", "initiator-info"))
             self.initiator_type = self.roadblock_role
@@ -1571,14 +1562,6 @@ class roadblock:
                 self.logger.info(".")
 
             self.logger.info("Roadblock is initialized")
-
-            # subscribe to busB
-            self.pubsubcon.subscribe(self.roadblock_uuid + "__busB")
-
-            # message myself on busB, once I receive this message on busA I will know I have processed all outstanding busA message and can move to monitoring busB
-            self.logger.debug("Sending 'switch-buses' message")
-            self.message_publish(self.message_build_custom(self.roadblock_role, "switch-buses", self.roadblock_role, self.my_id, "switch-buses"))
-
         if self.roadblock_role == "follower":
             # tell the leader that I am online
             self.logger.info("Sending 'follower-online' message")
@@ -1588,103 +1571,43 @@ class roadblock:
             self.logger.info("Sending 'leader-online' message")
             self.message_publish(self.message_build("all", "all", "leader-online"))
 
-        if self.initiator:
-            # the initiator (first member to get to the roadblock) is
-            # responsible for consuming messages from busB and copying
-            # them onto busA so that they are preserved for other members
-            # to receive once they arrive at the roadblock
+        last_msg_id = 0
+        while self.watch_bus:
+            if self.rc != 0:
+                self.logger.debug("self.rc != 0 --> breaking")
+                break
 
-            while self.mirror_busB:
-                if self.rc != 0:
-                    self.logger.debug("self.rc != 0 --> breaking")
-                    break
+            try:
+                msgs = self.redcon.xread(streams = { self.roadblock_uuid + "__bus": last_msg_id }, block = 0)
+            except redis.exceptions.ConnectionError as con_error:
+                self.logger.error("%s", con_error)
+                self.logger.error("Bus read failed due to connection error!")
+            except redis.exceptions.TimeoutError as con_error:
+                self.logger.error("%s", con_error)
+                self.logger.error("Bus read failed due to a timeout error!")
 
-                msg = self.pubsubcon.get_message()
+            if len(msgs) == 0:
+                time.sleep(0.001)
+            else:
+                self.logger.debug("retrieved %d messages for processing", len(msgs[0][1]))
 
-                if not msg:
-                    time.sleep(0.001)
-                else:
-                    msg_str = msg["data"].decode()
-                    self.logger.debug("initiator received msg=[%s] on busB", msg_str)
+                for msg_id, msg in msgs[0][1]:
+                    last_msg_id = msg_id
 
-                    msg = self.message_from_str(msg_str)
+                    self.logger.debug("received msg=[%s] with msg_id=[%s]", msg, msg_id)
 
-                    # copy the message over to busA
-                    self.logger.debug("initiator mirroring msg=[%s] to busA", msg_str)
-                    self.list_append(self.roadblock_uuid + "__busA", msg_str)
+                    msg = self.message_from_str(msg[b"msg"].decode())
 
                     if not self.message_for_me(msg):
                         self.logger.debug("received a message which is not for me!")
                     else:
                         if not self.message_validate(msg):
-                            self.logger.error("initiator received a message for me which did not validate! [%s]", msg_str)
+                            self.logger.error("received a message for me which did not validate! [%s]", msg)
                         else:
-                            self.logger.debug("initiator received a validated message for me! [%s]", msg_str)
+                            self.logger.debug("received a validated message for me!")
                             ret_val = self.message_handle(msg)
                             if ret_val:
                                 return ret_val
-
-                if not self.mirror_busB:
-                    self.logger.debug("initiator stopping busB mirroring to busA")
-        else:
-            msg_list_index = -1
-            while self.watch_busA:
-                if self.rc != 0:
-                    self.logger.debug("self.rc != 0 --> breaking")
-                    break
-
-                # retrieve unprocessed messages from busA
-                msg_list = self.list_fetch(self.roadblock_uuid + "__busA", msg_list_index+1)
-
-                # process any retrieved messages
-                if len(msg_list):
-                    for msg_str in msg_list:
-                        msg_list_index += 1
-                        self.logger.debug("received msg=[%s] on busA with status_index=[%d]", msg_str, msg_list_index)
-
-                        msg = self.message_from_str(msg_str)
-
-                        if not self.message_for_me(msg):
-                            self.logger.debug("received a message which is not for me!")
-                        else:
-                            if not self.message_validate(msg):
-                                self.logger.error("received a message for me which did not validate! [%s]", msg_str)
-                            else:
-                                self.logger.debug("received a validated message for me!")
-                                ret_val = self.message_handle(msg)
-                                if ret_val:
-                                    return ret_val
-
-                if self.watch_busA:
-                    time.sleep(1)
-
-        self.logger.debug("moving to common busB watch loop")
-
-        while self.watch_busB:
-            if self.rc != 0:
-                self.logger.debug("self.rc != 0 --> breaking")
-                break
-
-            msg = self.pubsubcon.get_message()
-
-            if not msg:
-                time.sleep(0.001)
-            else:
-                msg_str = msg["data"].decode()
-                self.logger.debug("received msg=[%s] on busB", msg_str)
-
-                msg = self.message_from_str(msg_str)
-
-                if not self.message_for_me(msg):
-                    self.logger.debug("received a message which is not for me!")
-                else:
-                    if not self.message_validate(msg):
-                        self.logger.error("received a message for me which did not validate! [%s]", msg_str)
-                    else:
-                        self.logger.debug("received a validated message for me!")
-                        ret_val = self.message_handle(msg)
-                        if ret_val:
-                            return ret_val
 
         if self.rc == 0:
             self.cleanup()
