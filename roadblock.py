@@ -1478,6 +1478,7 @@ class roadblock:
                                                      password = self.roadblock_redis_password,
                                                      port = 6379,
                                                      db = 0,
+                                                     socket_connect_timeout = 5,
                                                      health_check_interval = 0)
                 self.redcon = redis.Redis(connection_pool = self.con_pool)
                 self.redcon.ping()
@@ -1495,8 +1496,10 @@ class roadblock:
                 self.logger.error("%s", con_error)
                 self.logger.error("Redis connection could not be opened due to connection error!")
                 time.sleep(3)
-
-        self.pubsubcon = self.redcon.pubsub(ignore_subscribe_messages = True)
+            except redis.exceptions.TimeoutError as con_error:
+                self.logger.error("%s", con_error)
+                self.logger.error("Redis connection could not be opened due to a timeout error!")
+                time.sleep(3)
 
         self.con_watchdog_exit = threading.Event()
         self.con_watchdog = threading.Thread(target = self.connection_watchdog, args = ())
