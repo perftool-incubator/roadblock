@@ -1177,7 +1177,7 @@ class roadblock:
                 self.logger.critical("These followers never reached 'online': %s", self.get_followers_list(self.followers["online"]))
             elif len(self.followers["ready"]) != 0:
                 self.logger.critical("These followers never reached 'ready': %s", self.get_followers_list(self.followers["ready"]))
-            elif len(self.followers["busy_waiting"]) != 0 or len(self.followers["waiting"]) != 0:
+            elif self.roadblock_waiting:
                 if len(self.followers["busy_waiting"]) != 0:
                     self.logger.critical("These followers were still 'busy waiting': %s", self.get_followers_list(self.followers["busy_waiting"]))
 
