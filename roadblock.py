@@ -1287,7 +1287,6 @@ class roadblock:
                 else:
                     self.logger.error("Connection watchdog ping skipped due to disconnected state")
             except redis.exceptions.ConnectionError as con_error:
-                self.con_pool_state = False
                 self.logger.error("%s", con_error)
                 self.logger.error("Connection watchdog ping failed")
 
