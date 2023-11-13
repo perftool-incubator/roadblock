@@ -48,6 +48,7 @@ class roadblock:
     my_id = None
     roadblock_uuid = None
     message_validation = "all"
+    connection_watchdog_state = "disabled"
     roadblock_followers = None
     abort = None
     roadblock_leader_id = None
@@ -209,6 +210,13 @@ class roadblock:
         '''set the message validation level'''
 
         self.message_validation = msg_val
+
+        return 0
+
+    def set_connection_watchdog(self, con_watchdog_state):
+        '''Enable/disable the connection watchdog'''
+
+        self.connection_watchdog_state = con_watchdog_state
 
         return 0
 
@@ -1121,9 +1129,10 @@ class roadblock:
                 msg_count = self.redcon.xlen(self.roadblock_uuid + "__bus")
                 self.logger.debug("total messages on bus: %d", msg_count)
 
-            self.logger.info("Closing connection pool watchdog")
-            self.con_watchdog_exit.set()
-            self.con_watchdog.join()
+            if self.connection_watchdog_state == "enabled":
+                self.logger.info("Closing connection pool watchdog")
+                self.con_watchdog_exit.set()
+                self.con_watchdog.join()
 
             self.logger.info("Closing connection pool")
             self.con_pool.disconnect()
@@ -1502,9 +1511,10 @@ class roadblock:
                 self.logger.error("Redis connection could not be opened due to a timeout error!")
                 time.sleep(3)
 
-        self.con_watchdog_exit = threading.Event()
-        self.con_watchdog = threading.Thread(target = self.connection_watchdog, args = ())
-        self.con_watchdog.start()
+        if self.connection_watchdog_state == "enabled":
+            self.con_watchdog_exit = threading.Event()
+            self.con_watchdog = threading.Thread(target = self.connection_watchdog, args = ())
+            self.con_watchdog.start()
 
         self.logger.info("Roadblock UUID: %s", self.roadblock_uuid)
         self.logger.info("Role: %s", self.roadblock_role)

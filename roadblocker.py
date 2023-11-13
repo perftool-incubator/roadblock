@@ -109,6 +109,12 @@ def process_options ():
                         default = "none",
                         choices = [ "none", "checksum", "schema", "all" ])
 
+    parser.add_argument("--connection-watchdog",
+                        dest = "connection_watchdog",
+                        help = "Should the connection watchdog be enabled or disabled",
+                        default = "disabled",
+                        choices = [ "enabled", "disabled" ])
+
     parser.add_argument("--wait-for",
                         dest = "wait_for",
                         help = "Launch this program/script and wait for it to complete before proceeding.  Requires --wait-for-log to be set.",
@@ -169,6 +175,7 @@ def main():
     rb.set_message_log(t_global.args.message_log)
     rb.set_user_messages(t_global.args.user_messages)
     rb.set_message_validation(t_global.args.message_validation)
+    rb.set_connection_watchdog(t_global.args.connection_watchdog)
     rb.set_wait_for_cmd(t_global.wait_for_cmd)
     rb.set_wait_for_log(t_global.args.wait_for_log)
     rb.set_simulate_heartbeat_timeout(t_global.args.simulate_heartbeat_timeout)
