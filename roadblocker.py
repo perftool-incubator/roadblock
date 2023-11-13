@@ -106,7 +106,7 @@ def process_options ():
     parser.add_argument("--message-validation",
                         dest = "message_validation",
                         help = "What type of message validation to do",
-                        default = "all",
+                        default = "none",
                         choices = [ "none", "checksum", "schema", "all" ])
 
     parser.add_argument("--wait-for",
