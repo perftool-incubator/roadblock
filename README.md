@@ -9,7 +9,3 @@ Roadblock provides synchronization services for multiple lines of execution, mos
 ### Protocol
 
 ![Roadblock protocol flow chart](docs/charts/roadblock-protocol.svg)
-
-### Bus Mirroring
-
-![Roadblock bus mirroring flow chart](docs/charts/roadblock-bus-mirroring.svg)

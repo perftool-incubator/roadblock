@@ -5,16 +5,8 @@
 import sys
 import argparse
 
-from dataclasses import dataclass
-
 import redis
 
-
-@dataclass
-class global_vars:
-    '''Global variables'''
-
-    args=None
 
 def process_options ():
     '''Define the CLI argument parsing options'''
@@ -33,17 +25,17 @@ def process_options ():
                         default = 'foobar',
                         type = str)
 
-    t_global.args = parser.parse_args()
+    return parser.parse_args()
 
 def main():
     '''Main control block'''
 
-    process_options()
+    args = process_options()
 
     try:
-        redcon = redis.Redis(host = t_global.args.redis_server,
+        redcon = redis.Redis(host = args.redis_server,
                              port = 6379,
-                             password = t_global.args.redis_password,
+                             password = args.redis_password,
                              health_check_interval = 0)
         redcon.ping()
     except redis.exceptions.ConnectionError as con_error:
@@ -60,5 +52,4 @@ def main():
     return 0
 
 if __name__ == "__main__":
-    t_global = global_vars()
     sys.exit(main())

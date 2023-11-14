@@ -9,22 +9,8 @@ import socket
 import shlex
 
 from pathlib import Path
-from dataclasses import dataclass
 
 from roadblock import roadblock
-
-# define some global variables
-@dataclass
-class global_vars:
-    '''Global variables'''
-
-    args = None
-    log = None
-    wait_for_cmd = None
-
-    # log formatting variables
-    log_debug_format =  '[CODE][%(module)s %(funcName)s:%(lineno)d]\n[%(asctime)s][%(levelname) 8s] %(message)s'
-    log_normal_format = '[%(asctime)s][%(levelname) 8s] %(message)s'
 
 
 def process_options ():
@@ -106,8 +92,14 @@ def process_options ():
     parser.add_argument("--message-validation",
                         dest = "message_validation",
                         help = "What type of message validation to do",
-                        default = "all",
+                        default = "none",
                         choices = [ "none", "checksum", "schema", "all" ])
+
+    parser.add_argument("--connection-watchdog",
+                        dest = "connection_watchdog",
+                        help = "Should the connection watchdog be enabled or disabled",
+                        default = "disabled",
+                        choices = [ "enabled", "disabled" ])
 
     parser.add_argument("--wait-for",
                         dest = "wait_for",
@@ -126,55 +118,62 @@ def process_options ():
                         help = argparse.SUPPRESS,
                         action = "store_true")
 
-    t_global.args = parser.parse_args()
+    args = parser.parse_args()
 
-    if t_global.args.wait_for is not None and t_global.args.wait_for_log is None:
+    if args.wait_for is not None and args.wait_for_log is None:
         parser.error("When --wait-for is defined then --wait-for-log must also be defined")
 
-    if t_global.args.wait_for is not None:
-        t_global.wait_for_cmd = shlex.split(t_global.args.wait_for)
-        p = Path(t_global.wait_for_cmd[0])
+    if args.wait_for is not None:
+        cmd = shlex.split(args.wait_for)
+        p = Path(cmd[0])
         if not p.exists():
-            parser.error(f"The specified --wait-for command does not exist [{t_global.wait_for_cmd[0]}]")
+            parser.error(f"The specified --wait-for command does not exist [{cmd[0]}]")
         if not p.is_file():
-            parser.error(f"The specified --wait-for command is not a file [{t_global.wait_for_cmd[0]}]")
+            parser.error(f"The specified --wait-for command is not a file [{cmd[0]}]")
 
-    if t_global.args.log_level == 'debug':
-        logging.basicConfig(level = logging.DEBUG, format = t_global.log_debug_format, stream = sys.stdout)
-    elif t_global.args.log_level == 'normal':
-        logging.basicConfig(level = logging.INFO, format = t_global.log_normal_format, stream = sys.stdout)
-
-    t_global.log = logging.getLogger(__file__)
+    return args
 
 
 def main():
     '''Main control block'''
 
-    process_options()
+    args = process_options()
+
+    # log formatting variables
+    log_debug_format =  '[CODE][%(module)s %(funcName)s:%(lineno)d]\n[%(asctime)s][%(levelname) 8s] %(message)s'
+    log_normal_format = '[%(asctime)s][%(levelname) 8s] %(message)s'
+
+    if args.log_level == 'debug':
+        logging.basicConfig(level = logging.DEBUG, format = log_debug_format, stream = sys.stdout)
+    elif args.log_level == 'normal':
+        logging.basicConfig(level = logging.INFO, format = log_normal_format, stream = sys.stdout)
+
+    logger = logging.getLogger(__file__)
 
     log_debug = False
-    if t_global.args.log_level == "debug":
+    if args.log_level == "debug":
         log_debug = True
 
-    rb = roadblock(t_global.log, log_debug)
-    rb.set_uuid(t_global.args.roadblock_uuid)
-    rb.set_role(t_global.args.roadblock_role)
-    rb.set_follower_id(t_global.args.roadblock_follower_id)
-    rb.set_leader_id(t_global.args.roadblock_leader_id)
-    rb.set_timeout(t_global.args.roadblock_timeout)
-    rb.set_redis_server(t_global.args.roadblock_redis_server)
-    rb.set_redis_password(t_global.args.roadblock_redis_password)
-    rb.set_followers(t_global.args.roadblock_followers)
-    rb.set_abort(t_global.args.abort)
-    rb.set_message_log(t_global.args.message_log)
-    rb.set_user_messages(t_global.args.user_messages)
-    rb.set_message_validation(t_global.args.message_validation)
-    rb.set_wait_for_cmd(t_global.wait_for_cmd)
-    rb.set_wait_for_log(t_global.args.wait_for_log)
-    rb.set_simulate_heartbeat_timeout(t_global.args.simulate_heartbeat_timeout)
+    rb = roadblock(logger, log_debug)
+    rb.set_uuid(args.roadblock_uuid)
+    rb.set_role(args.roadblock_role)
+    rb.set_follower_id(args.roadblock_follower_id)
+    rb.set_leader_id(args.roadblock_leader_id)
+    rb.set_timeout(args.roadblock_timeout)
+    rb.set_redis_server(args.roadblock_redis_server)
+    rb.set_redis_password(args.roadblock_redis_password)
+    rb.set_followers(args.roadblock_followers)
+    rb.set_abort(args.abort)
+    rb.set_message_log(args.message_log)
+    rb.set_user_messages(args.user_messages)
+    rb.set_message_validation(args.message_validation)
+    rb.set_connection_watchdog(args.connection_watchdog)
+    if args.wait_for is not None:
+        rb.set_wait_for_cmd(shlex.split(args.wait_for))
+    rb.set_wait_for_log(args.wait_for_log)
+    rb.set_simulate_heartbeat_timeout(args.simulate_heartbeat_timeout)
 
     return rb.run_it()
 
 if __name__ == "__main__":
-    t_global = global_vars()
     sys.exit(main())
