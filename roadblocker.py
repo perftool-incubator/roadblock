@@ -66,6 +66,12 @@ def process_options ():
                         action = "append",
                         type = str)
 
+    parser.add_argument("--followers-file",
+                        dest = "roadblock_followers_file",
+                        help = "File containing a list of followers to load",
+                        default = None,
+                        type = str)
+
     parser.add_argument("--abort",
                         dest = "abort",
                         help = "Use this option as a follower or leader to send an abort message as part of this synchronization",
@@ -131,6 +137,14 @@ def process_options ():
         if not p.is_file():
             parser.error(f"The specified --wait-for command is not a file [{cmd[0]}]")
 
+    if args.roadblock_followers_file is not None:
+        rb_f_file = shlex.split(args.roadblock_followers_file)
+        p = Path(rb_f_file[0])
+        if not p.exists():
+            parser.error(f"The specified --followers-file does not exist [{rb_f_file[0]}]")
+        if not p.is_file():
+            parser.error(f"The specified --followers-file is not a file [{rb_f_file[0]}]")
+
     return args
 
 
@@ -154,6 +168,18 @@ def main():
     if args.log_level == "debug":
         log_debug = True
 
+    followers = []
+    if args.roadblock_followers is not None and len(args.roadblock_followers) > 0:
+        followers.extend(args.roadblock_followers)
+    if args.roadblock_followers_file is not None:
+        try:
+            with open(args.roadblock_followers_file, "r", encoding="ascii") as followers_file:
+                for line in followers_file:
+                    followers.append(line.rstrip('\n'))
+        except IOError:
+            logger.critical("Could not load the roadblock followers file '%s'!", args.roadblock_followers_file)
+            return 2
+
     rb = roadblock(logger, log_debug)
     rb.set_uuid(args.roadblock_uuid)
     rb.set_role(args.roadblock_role)
@@ -162,7 +188,7 @@ def main():
     rb.set_timeout(args.roadblock_timeout)
     rb.set_redis_server(args.roadblock_redis_server)
     rb.set_redis_password(args.roadblock_redis_password)
-    rb.set_followers(args.roadblock_followers)
+    rb.set_followers(followers)
     rb.set_abort(args.abort)
     rb.set_message_log(args.message_log)
     rb.set_user_messages(args.user_messages)
