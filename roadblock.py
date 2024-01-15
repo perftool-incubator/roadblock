@@ -1636,8 +1636,12 @@ class roadblock:
                         self.roadblock_uuid + "__bus__" + self.my_id: personal_last_msg_id
                     }, block = 0)
             except redis.exceptions.ConnectionError as con_error:
-                self.logger.error("%s", con_error)
-                self.logger.error("Bus read failed due to connection error!")
+                if self.con_pool_state:
+                    self.logger.error("%s", con_error)
+                    self.logger.error("Bus read failed due to connection error!")
+                else:
+                    self.logger.debug("%s", con_error)
+                    self.logger.debug("Bus read failed because the connection has been closed")
             except redis.exceptions.TimeoutError as con_error:
                 self.logger.error("%s", con_error)
                 self.logger.error("Bus read failed due to a timeout error!")
