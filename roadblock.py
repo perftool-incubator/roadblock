@@ -1252,11 +1252,12 @@ class roadblock:
     def do_timeout(self):
         '''Handle a roadblock timeout event'''
 
+        self.rc = self.RC_TIMEOUT
+
         self.logger.critical("Roadblock failed with timeout")
 
         self.timeout_internals()
 
-        self.rc = self.RC_TIMEOUT
         return self.rc
 
     def timeout_signal_handler(self, signum, frame):
@@ -1622,6 +1623,7 @@ class roadblock:
                 self.logger.debug("self.rc != 0 --> breaking")
                 break
 
+            msgs = []
             try:
                 if self.roadblock_role == "follower":
                     msgs = self.redcon.xread(streams = {
@@ -1636,8 +1638,12 @@ class roadblock:
                         self.roadblock_uuid + "__bus__" + self.my_id: personal_last_msg_id
                     }, block = 0)
             except redis.exceptions.ConnectionError as con_error:
-                self.logger.error("%s", con_error)
-                self.logger.error("Bus read failed due to connection error!")
+                if self.con_pool_state:
+                    self.logger.error("%s", con_error)
+                    self.logger.error("Bus read failed due to connection error!")
+                else:
+                    self.logger.debug("%s", con_error)
+                    self.logger.debug("Bus read failed because the connection has been closed")
             except redis.exceptions.TimeoutError as con_error:
                 self.logger.error("%s", con_error)
                 self.logger.error("Bus read failed due to a timeout error!")
