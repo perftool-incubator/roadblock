@@ -1252,11 +1252,12 @@ class roadblock:
     def do_timeout(self):
         '''Handle a roadblock timeout event'''
 
+        self.rc = self.RC_TIMEOUT
+
         self.logger.critical("Roadblock failed with timeout")
 
         self.timeout_internals()
 
-        self.rc = self.RC_TIMEOUT
         return self.rc
 
     def timeout_signal_handler(self, signum, frame):
