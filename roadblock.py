@@ -1623,6 +1623,7 @@ class roadblock:
                 self.logger.debug("self.rc != 0 --> breaking")
                 break
 
+            msgs = []
             try:
                 if self.roadblock_role == "follower":
                     msgs = self.redcon.xread(streams = {
