@@ -36,75 +36,75 @@ class roadblock:
     RC_HEARTBEAT_TIMEOUT=5
     RC_ABORT_WAITING=6
 
-    # object variables
-    logger = None
-    debug = False
-
-    # return code status
-    rc = 0
-
-    # parameters
-    roadblock_role = None
-    my_id = None
-    roadblock_uuid = None
-    message_validation = "all"
-    connection_watchdog_state = "disabled"
-    roadblock_followers = None
-    abort = None
-    roadblock_leader_id = None
-    wait_for_cmd = None
-    wait_for = None
-    wait_for_log = None
-    simulate_heartbeat_timeout = None
-    roadblock_follower_id = None
-    roadblock_timeout = 30
-    roadblock_redis_server = "localhost"
-    roadblock_redis_password = None
-
-    # runtime variables
-    alarm_active = False
-    con_pool = None
-    con_pool_state = False
-    con_watchdog_exit = None
-    con_watchdog = None
-    wait_for_cmd = None
-    wait_for_io_handler_exited = None
-    wait_for_launcher_thread = None
-    wait_for_process = None
-    wait_for_monitor_thread = None
-    wait_for_monitor_exit = None
-    wait_for_monitor_start = None
-    wait_for_waiting = False
-    redcon = None
-    initiator = False
-    schema = None
-    user_schema = None
-    my_id = None
-    watch_bus = True
-    leader_abort = False
-    leader_abort_waiting = False
-    roadblock_waiting = False
-    follower_abort = False
-    initiator_type = None
-    initiator_id = None
-    followers = { "online": {},
-                  "ready": {},
-                  "gone": {},
-                  "waiting": {},
-                  "waiting_backup": {},
-                  "busy_waiting": {} }
-    processed_messages = {}
-    messages = { "sent": [],
-                 "received": [] }
-    message_log = None
-    user_messages = []
-    log = None
-    heartbeat_timeout = 30
-    waiting_failed = False
-    sigint_counter = 0
-
     def __init__(self, logger, debug):
         '''roadblock object initiator function'''
+
+        # object variables
+        self.logger = None
+        self.debug = False
+
+        # return code status
+        self.rc = 0
+
+        # parameters
+        self.roadblock_role = None
+        self.my_id = None
+        self.roadblock_uuid = None
+        self.message_validation = "all"
+        self.connection_watchdog_state = "disabled"
+        self.roadblock_followers = None
+        self.abort = None
+        self.roadblock_leader_id = None
+        self.wait_for_cmd = None
+        self.wait_for = None
+        self.wait_for_log = None
+        self.simulate_heartbeat_timeout = None
+        self.roadblock_follower_id = None
+        self.roadblock_timeout = 30
+        self.roadblock_redis_server = "localhost"
+        self.roadblock_redis_password = None
+
+        # runtime variables
+        self.alarm_active = False
+        self.con_pool = None
+        self.con_pool_state = False
+        self.con_watchdog_exit = None
+        self.con_watchdog = None
+        self.wait_for_cmd = None
+        self.wait_for_io_handler_exited = None
+        self.wait_for_launcher_thread = None
+        self.wait_for_process = None
+        self.wait_for_monitor_thread = None
+        self.wait_for_monitor_exit = None
+        self.wait_for_monitor_start = None
+        self.wait_for_waiting = False
+        self.redcon = None
+        self.initiator = False
+        self.schema = None
+        self.user_schema = None
+        self.my_id = None
+        self.watch_bus = True
+        self.leader_abort = False
+        self.leader_abort_waiting = False
+        self.roadblock_waiting = False
+        self.follower_abort = False
+        self.initiator_type = None
+        self.initiator_id = None
+        self.followers = { "online": {},
+                           "ready": {},
+                           "gone": {},
+                           "waiting": {},
+                           "waiting_backup": {},
+                           "busy_waiting": {} }
+        self.processed_messages = {}
+        self.messages = { "sent": [],
+                          "received": [] }
+        self.message_log = None
+        self.user_messages = []
+        self.log = None
+        self.heartbeat_timeout = 30
+        self.waiting_failed = False
+        self.sigint_counter = 0
 
         if not debug:
             self.debug = True
