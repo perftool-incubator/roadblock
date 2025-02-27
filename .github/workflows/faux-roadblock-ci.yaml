@@ -15,7 +15,7 @@ on:
     - 'docs/**'
 
 jobs:
-  roadblock-ci:
+  roadblock-ci-complete:
     runs-on: [ self-hosted, workflow-overhead ]
     steps:
     - run: 'echo "No build required" '
