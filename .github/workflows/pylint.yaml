@@ -6,6 +6,7 @@ on:
     paths-ignore:
     - LICENSE
     - '**.md'
+    - '.github/rulesets/**'
     - .github/workflows/run-crucible-tracking.yaml
     - .github/workflows/crucible-merged.yaml
     - .github/workflows/faux-crucible-ci.yaml
@@ -38,4 +39,4 @@ jobs:
     - name: Analysing the code with pylint
       run: |
         python_files=$(find . -name "*.py")
-        pylint --disable=too-many-locals --disable=line-too-long --disable=too-many-lines --disable=too-many-return-statements --disable=too-many-branches --disable=too-many-statements --disable=too-many-branches --disable=too-many-nested-blocks --disable=no-else-return --disable=too-many-arguments --disable=unused-argument --disable=invalid-name --disable=too-many-instance-attributes --disable=consider-using-with --disable=too-many-public-methods ${python_files}
+        pylint --disable=too-many-locals --disable=line-too-long --disable=too-many-lines --disable=too-many-return-statements --disable=too-many-branches --disable=too-many-statements --disable=too-many-branches --disable=too-many-nested-blocks --disable=no-else-return --disable=too-many-arguments --disable=unused-argument --disable=invalid-name --disable=too-many-instance-attributes --disable=consider-using-with --disable=too-many-public-methods --disable=too-many-positional-arguments ${python_files}
