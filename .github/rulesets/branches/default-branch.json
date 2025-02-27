@@ -1,9 +1,9 @@
 {
-  "id": 3826690,
+  "id": 3847740,
   "name": "default-branch",
   "target": "branch",
   "source_type": "Repository",
-  "source": "perftool-incubator/workshop",
+  "source": "perftool-incubator/roadblock",
   "enforcement": "active",
   "conditions": {
     "ref_name": {
@@ -41,10 +41,13 @@
         "do_not_enforce_on_create": false,
         "required_status_checks": [
           {
-            "context": "workshop-ci"
+            "context": "call-core-crucible-ci / core-crucible-ci-complete"
           },
           {
-            "context": "call-core-release-crucible-ci / core-release-crucible-ci-complete"
+            "context": "pylint"
+          },
+          {
+            "context": "roadblock-ci-complete"
           }
         ]
       }
