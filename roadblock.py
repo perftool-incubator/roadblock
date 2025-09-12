@@ -65,7 +65,8 @@ class roadblock:
         self.roadblock_redis_password = None
 
         # runtime variables
-        self.alarm_active = False
+        self.timeout_active = False
+        self.timeout_thread = None
         self.con_pool = None
         self.con_pool_state = False
         self.con_watchdog_exit = None
@@ -242,19 +243,27 @@ class roadblock:
 
         return 0
 
-    def set_alarm(self, seconds):
-        '''Set a SIGALRM to fire in `seconds` seconds'''
+    def enable_timeout(self, seconds, timeout_function):
+        '''Enable a timeout thread to fire  in `seconds` seconds'''
 
-        signal.alarm(seconds)
-        self.alarm_active = True
+        self.disable_timeout()
+
+        self.logger.debug("Creating new timeout")
+        self.timeout_thread = threading.Timer(seconds, timeout_function)
+        self.timeout_thread.start()
+        self.timeout_active = True
 
         return self.RC_SUCCESS
 
-    def disable_alarm(self):
-        '''Disable an existing SIGALRM'''
+    def disable_timeout(self):
+        '''Disable an existing timeout thread'''
 
-        signal.alarm(0)
-        self.alarm_active = True
+        if self.timeout_thread is not None and self.timeout_active:
+            self.logger.info("Disabling existing timeout")
+            self.timeout_thread.cancel()
+            self.timeout_active = False
+        else:
+            self.logger.debug("No existing timeout to disable")
 
         return self.RC_SUCCESS
 
@@ -746,11 +755,11 @@ class roadblock:
             timeout = mytime - cluster_timeout
 
             if timeout < 0:
-                self.set_alarm(abs(timeout))
+                self.enable_timeout(abs(timeout), self.timeout_handler)
                 self.logger.info("The new timeout value is in %d seconds", abs(timeout))
                 self.logger.info("Timeout: %s", datetime.datetime.utcfromtimestamp(cluster_timeout).strftime("%Y-%m-%d at %H:%M:%S UTC"))
             else:
-                self.disable_alarm()
+                self.disable_timeout()
                 self.logger.critical("The timeout has already occurred")
                 return self.RC_TIMEOUT
         elif msg_command == "leader-online":
@@ -826,18 +835,14 @@ class roadblock:
                         self.logger.info("Sending 'all-wait' command")
                         self.message_publish("followers", self.message_build("all", "all", "all-wait"))
 
-                        self.logger.info("Disabling original timeout")
-                        self.disable_alarm()
+                        self.logger.info("Disabling original timeout handler")
+                        self.disable_timeout()
 
-                        self.logger.info("Disabling original timeout signal handler")
-                        self.logger.info("Enabling heartbeat timeout signal handler")
-                        signal.signal(signal.SIGALRM, self.heartbeat_signal_handler)
+                        self.logger.info("Enabling heartbeat timeout handler")
+                        self.enable_timeout(self.heartbeat_timeout, self.heartbeat_handler)
 
                         self.logger.info("Sending 'leader-heartbeat' message")
                         self.message_publish("followers", self.message_build("all", "all", "leader-heartbeat"))
-
-                        self.logger.info("Starting heartbeat monitoring period")
-                        self.set_alarm(self.heartbeat_timeout)
                     else:
                         self.logger.info("Sending 'all-go' command")
                         self.message_publish("followers", self.message_build("all", "all", "all-go"))
@@ -846,7 +851,7 @@ class roadblock:
                 self.logger.info("Received 'all-wait' message")
 
                 self.logger.info("Disabling original timeout")
-                self.disable_alarm()
+                self.disable_timeout()
         elif msg_command == "leader-heartbeat":
             if self.roadblock_role == "follower":
                 self.logger.info("Received 'leader-heartbeat' message")
@@ -872,7 +877,7 @@ class roadblock:
 
                 if len(self.followers["busy_waiting"]) == 0 and len(self.followers["waiting"]) == 0:
                     self.logger.info("Disabling heartbeat timeout")
-                    self.disable_alarm()
+                    self.disable_timeout()
 
                     if self.waiting_failed:
                         self.leader_abort = True
@@ -900,7 +905,7 @@ class roadblock:
 
                 if len(self.followers["busy_waiting"]) == 0 or self.waiting_failed:
                     self.logger.info("Disabling heartbeat timeout")
-                    self.disable_alarm()
+                    self.disable_timeout()
 
                     if self.waiting_failed:
                         self.leader_abort_waiting = True
@@ -1116,9 +1121,8 @@ class roadblock:
 
         self.logger.info("Cleaning up")
 
-        if self.alarm_active:
-            self.logger.info("Disabling timeout alarm")
-            self.disable_alarm()
+        if self.timeout_active:
+            self.disable_timeout()
 
         if self.wait_for is not None:
             self.logger.info("Closing wait_for monitor thread")
@@ -1221,7 +1225,7 @@ class roadblock:
 
         return self.RC_SUCCESS
 
-    def do_heartbeat_signal(self):
+    def do_heartbeat_timeout(self):
         '''Handle a heartbeat timeout event'''
 
         if len(self.followers["waiting"]) != 0:
@@ -1236,7 +1240,7 @@ class roadblock:
             return self.rc
         else:
             self.logger.info("Successfully ending current heartbeat monitoring period")
-            self.disable_alarm()
+            self.disable_timeout()
 
             # rebuild the tracking list by copying from a backup
             self.followers["waiting"] = copy.deepcopy(self.followers["waiting_backup"])
@@ -1245,7 +1249,7 @@ class roadblock:
             self.message_publish("followers", self.message_build("all", "all", "leader-heartbeat"))
 
             self.logger.info("Starting new heartbeat monitoring period")
-            self.set_alarm(self.heartbeat_timeout)
+            self.enable_timeout(self.heartbeat_timeout, self.heartbeat_handler)
 
         return self.RC_SUCCESS
 
@@ -1260,26 +1264,18 @@ class roadblock:
 
         return self.rc
 
-    def timeout_signal_handler(self, signum, frame):
-        '''Handle roadblock timeout signals delivered to the process'''
+    def timeout_handler(self):
+        '''Handle roadblock timeout'''
 
-        if signum == 14: # SIGALRM
-            self.alarm_active = False
-            self.do_timeout()
-            return self.rc
-        else:
-            self.logger.info("Timeout Signal handler called with signal %d", signum)
+        self.timeout_active = False
+        self.do_timeout()
+        return self.rc
 
-        return self.RC_SUCCESS
+    def heartbeat_handler(self):
+        '''Handle heartbeat timeout'''
 
-    def heartbeat_signal_handler(self, signum, frame):
-        '''Handle heartbeat timeout signals delivered to the process'''
-
-        if signum == 14: # SIGALRM
-            self.alarm_active = False
-            self.do_heartbeat_signal()
-        else:
-            self.logger.info("Heartbeat Signal handler called with signal %d", signum)
+        self.timeout_active = False
+        self.do_heartbeat_timeout()
 
         return self.RC_SUCCESS
 
@@ -1479,12 +1475,13 @@ class roadblock:
                 self.logger.critical("Could not JSON validate the user messages!")
                 return self.RC_INVALID_INPUT
 
-        # define a signal handler that will respond to SIGALRM when a
-        # timeout even occurs
-        signal.signal(signal.SIGALRM, self.timeout_signal_handler)
-
         mytime = calendar.timegm(time.gmtime())
         self.logger.info("Current Time: %s", datetime.datetime.utcfromtimestamp(mytime).strftime("%Y-%m-%d at %H:%M:%S UTC"))
+
+        # set the default timeout
+        self.enable_timeout(self.roadblock_timeout, self.timeout_handler)
+        cluster_timeout = mytime + self.roadblock_timeout
+        self.logger.info("Timeout: %s", datetime.datetime.utcfromtimestamp(cluster_timeout).strftime("%Y-%m-%d at %H:%M:%S UTC"))
 
         if self.wait_for is not None:
             self.logger.info("Wait-For: True")
@@ -1498,11 +1495,6 @@ class roadblock:
             self.wait_for_monitor_thread.start()
         else:
             self.logger.info("Wait-For: False")
-
-        # set the default timeout alarm
-        self.set_alarm(self.roadblock_timeout)
-        cluster_timeout = mytime + self.roadblock_timeout
-        self.logger.info("Timeout: %s", datetime.datetime.utcfromtimestamp(cluster_timeout).strftime("%Y-%m-%d at %H:%M:%S UTC"))
 
         # create the redis connections
         while not self.con_pool_state:
