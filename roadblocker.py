@@ -4,9 +4,11 @@
 
 import argparse
 import logging
-import sys
+import signal
 import socket
 import shlex
+import sys
+import threading
 
 from pathlib import Path
 
@@ -148,8 +150,29 @@ def process_options ():
     return args
 
 
+def sigint_handler(signum, frame):
+    '''Handle a SIGINT/CTRL-C'''
+    global sigint_counter
+
+    if signum == 2: # SIGINT
+        logger.warning("Caught a SIGINT signal")
+        sigint_counter += 1
+
+        if sigint_counter == 1:
+            logger.warning("SIGINT handler is procesing a minor abort event")
+            minor_abort_event.set()
+        else:
+            logger.warning("SIGINT handler is processing a major abort event [%d]", sigint_counter)
+            major_abort_event.set()
+    else:
+        logger.warning("SIGINT handler called with signal %d", signum)
+
+    return 0
+
+
 def main():
     '''Main control block'''
+    global logger
 
     args = process_options()
 
@@ -198,8 +221,17 @@ def main():
         rb.set_wait_for_cmd(shlex.split(args.wait_for))
     rb.set_wait_for_log(args.wait_for_log)
     rb.set_simulate_heartbeat_timeout(args.simulate_heartbeat_timeout)
+    rb.set_minor_abort_event(minor_abort_event)
+    rb.set_major_abort_event(major_abort_event)
+
+    #catch SIGINT/CTRL-C
+    signal.signal(signal.SIGINT, sigint_handler)
 
     return rb.run_it()
 
 if __name__ == "__main__":
+    logger = None
+    minor_abort_event = threading.Event()
+    major_abort_event = threading.Event()
+    sigint_counter = 0
     sys.exit(main())

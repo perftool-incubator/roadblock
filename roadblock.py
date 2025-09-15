@@ -3,7 +3,6 @@
 import datetime
 import time
 import calendar
-import signal
 import hashlib
 import json
 import uuid
@@ -63,8 +62,14 @@ class roadblock:
         self.roadblock_timeout = 30
         self.roadblock_redis_server = "localhost"
         self.roadblock_redis_password = None
+        self.minor_abort_event = None
+        self.major_abort_event = None
 
         # runtime variables
+        self.abort_event_loop = threading.Event()
+        self.abort_event_thread = None
+        self.minor_abort_event_processed = False
+        self.major_abort_event_processed = False
         self.timeout_active = False
         self.timeout_thread = None
         self.con_pool = None
@@ -105,7 +110,6 @@ class roadblock:
         self.log = None
         self.heartbeat_timeout = 30
         self.waiting_failed = False
-        self.sigint_counter = 0
 
         if not debug:
             self.debug = True
@@ -129,6 +133,20 @@ class roadblock:
         '''return the logging object'''
 
         return self.logger
+
+    def set_minor_abort_event(self, event):
+        '''set the minor abort event'''
+
+        self.minor_abort_event = event
+
+        return 0
+
+    def set_major_abort_event(self, event):
+        '''set the major abort event'''
+
+        self.major_abort_event = event
+
+        return 0
 
     def set_role(self, role):
         '''set the participant's role'''
@@ -1174,6 +1192,11 @@ class roadblock:
         for msg in self.processed_messages:
             self.logger.debug("\t%s", msg)
 
+        if self.abort_event_thread is not None:
+            # tell the abort event loop/thread to exit
+            self.logger.info("Closing abort event handler")
+            self.abort_event_loop.set()
+
         return self.RC_SUCCESS
 
     def get_followers_list(self, followers):
@@ -1279,26 +1302,36 @@ class roadblock:
 
         return self.RC_SUCCESS
 
-    def sigint_handler(self, signum, frame):
-        '''Handle a SIGINT/CTRL-C'''
+    def abort_event_handler(self):
+        '''thread to handle minor/major abort events signaled by the caller'''
 
-        if signum == 2: # SIGINT
-            self.logger.warning("Caught SIGINT signal")
-            self.sigint_counter += 1
+        self.logger.debug("Starting abort event thread handler")
 
-            if self.sigint_counter > 1:
-                self.logger.critical("Exiting due to SIGINT being received more than 1 time")
+        while not self.abort_event_loop.is_set():
+            #self.logger.debug("Starting a pass through the abort event loop")
+
+            if self.major_abort_event is not None and self.major_abort_event.is_set():
+                self.major_abort_event.clear()
+                self.major_abort_event_processed = True
+
+                self.logger.critical("Exiting due to a major abort event")
                 self.cleanup()
 
                 # signal myself to exit
                 self.watch_bus = False
 
                 self.rc = self.RC_ERROR
-            else:
-                self.logger.warning("SIGINT has been received once -> attempting to abort")
+            elif self.minor_abort_event is not None and self.minor_abort_event.is_set():
+                self.minor_abort_event.clear()
+                self.minor_abort_event_processed = True
+
+                self.logger.warning("Attempting to abort due to a minor abort event")
                 self.leader_abort = True
-        else:
-            self.logger.info("SIGINT Signal handler called with signal %d", signum)
+
+            time.sleep(0.01)
+            #time.sleep(1.0)
+
+        self.logger.debug("Finishing abort event thread handler")
 
         return self.RC_SUCCESS
 
@@ -1421,8 +1454,12 @@ class roadblock:
     def run_it(self):
         '''execute the roadblock'''
 
-        #catch SIGINT/CTRL-C
-        signal.signal(signal.SIGINT, self.sigint_handler)
+        self.logger.info("Executing Roadblock")
+        self.logger.info("Roadblock UUID: %s", self.roadblock_uuid)
+
+        if self.minor_abort_event is not None or self.major_abort_event is not None:
+            self.abort_event_thread = threading.Thread(target = self.abort_event_handler, args = ())
+            self.abort_event_thread.start()
 
         if len(self.roadblock_leader_id) == 0:
             self.logger.critical("You must specify the leader's ID using --leader-id")
@@ -1531,7 +1568,6 @@ class roadblock:
             self.con_watchdog = threading.Thread(target = self.connection_watchdog, args = ())
             self.con_watchdog.start()
 
-        self.logger.info("Roadblock UUID: %s", self.roadblock_uuid)
         self.logger.info("Role: %s", self.roadblock_role)
         if self.roadblock_role == "follower":
             self.logger.info("Follower ID: %s", self.roadblock_follower_id)
@@ -1678,8 +1714,8 @@ class roadblock:
 
         self.logger.info("Exiting")
 
-        if self.sigint_counter > 1 and self.rc != 0:
-            self.logger.critical("Roadblock Completed with a double SIGINT")
+        if self.major_abort_event_processed and self.rc != 0:
+            self.logger.critical("Roadblock Completed with a major abort event")
             return self.RC_ERROR
 
         if self.rc == self.RC_HEARTBEAT_TIMEOUT:
