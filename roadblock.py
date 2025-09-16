@@ -23,7 +23,7 @@ class roadblock:
     '''roadblock object class'''
 
     # log formatting variables
-    log_debug_format =  '[CODE][%(module)s %(funcName)s:%(lineno)d]\n[%(asctime)s][%(levelname) 8s] %(message)s'
+    log_debug_format =  '[CODE][%(module)s %(funcName)s:%(lineno)d]\n[%(asctime)s][%(levelname) 8s][%(threadName)s] %(message)s'
     log_normal_format = '[%(asctime)s][%(levelname) 8s] %(message)s'
 
     # return code variables
@@ -261,13 +261,14 @@ class roadblock:
 
         return 0
 
-    def enable_timeout(self, seconds, timeout_function):
+    def enable_timeout(self, seconds, timeout_function, thread_name):
         '''Enable a timeout thread to fire  in `seconds` seconds'''
 
         self.disable_timeout()
 
         self.logger.debug("Creating new timeout")
         self.timeout_thread = threading.Timer(seconds, timeout_function)
+        self.timeout_thread.name = thread_name
         self.timeout_thread.start()
         self.timeout_active = True
 
@@ -773,7 +774,7 @@ class roadblock:
             timeout = mytime - cluster_timeout
 
             if timeout < 0:
-                self.enable_timeout(abs(timeout), self.timeout_handler)
+                self.enable_timeout(abs(timeout), self.timeout_handler, "timeout_handler_2")
                 self.logger.info("The new timeout value is in %d seconds", abs(timeout))
                 self.logger.info("Timeout: %s", datetime.datetime.utcfromtimestamp(cluster_timeout).strftime("%Y-%m-%d at %H:%M:%S UTC"))
             else:
@@ -857,7 +858,7 @@ class roadblock:
                         self.disable_timeout()
 
                         self.logger.info("Enabling heartbeat timeout handler")
-                        self.enable_timeout(self.heartbeat_timeout, self.heartbeat_handler)
+                        self.enable_timeout(self.heartbeat_timeout, self.heartbeat_handler, "heartbeat_handler_1")
 
                         self.logger.info("Sending 'leader-heartbeat' message")
                         self.message_publish("followers", self.message_build("all", "all", "leader-heartbeat"))
@@ -1273,7 +1274,7 @@ class roadblock:
             self.message_publish("followers", self.message_build("all", "all", "leader-heartbeat"))
 
             self.logger.info("Starting new heartbeat monitoring period")
-            self.enable_timeout(self.heartbeat_timeout, self.heartbeat_handler)
+            self.enable_timeout(self.heartbeat_timeout, self.heartbeat_handler, "heartbeat_handler_2")
 
         return self.RC_SUCCESS
 
@@ -1291,15 +1292,24 @@ class roadblock:
     def timeout_handler(self):
         '''Handle roadblock timeout'''
 
+        self.logger.debug("Starting timeout handler thread")
+
         self.timeout_active = False
         self.do_timeout()
+
+        self.logger.debug("Finishing timeout handler thread")
+
         return self.rc
 
     def heartbeat_handler(self):
         '''Handle heartbeat timeout'''
 
+        self.logger.debug("Starting heartbeat timeout handler thread")
+
         self.timeout_active = False
         self.do_heartbeat_timeout()
+
+        self.logger.debug("Finishing heartbeat timeout handler thread")
 
         return self.RC_SUCCESS
 
@@ -1339,6 +1349,8 @@ class roadblock:
     def connection_watchdog(self):
         '''Check if the redis connection is still open'''
 
+        self.logger.debug("Starting connection watchdog thread")
+
         while not self.con_watchdog_exit.is_set():
             time.sleep(1)
             try:
@@ -1353,10 +1365,14 @@ class roadblock:
                 self.logger.error("%s", con_error)
                 self.logger.error("Connection watchdog ping failed")
 
+        self.logger.debug("Finishing connection watchdog thread")
+
         return self.RC_SUCCESS
 
     def wait_for_process_io_handler(self):
         '''Handle the output logging of a --wait-for program/script process'''
+
+        self.logger.debug("Starting wait for process io handler thread")
 
         self.wait_for_io_handler_exited = threading.Event()
 
@@ -1376,10 +1392,14 @@ class roadblock:
 
         self.wait_for_io_handler_exited.set()
 
+        self.logger.debug("Finishing wait for process io handler thread")
+
         return self.RC_SUCCESS
 
     def wait_for_process_monitor(self):
         '''Monitor the status of a --wait-for program/script process'''
+
+        self.logger.debug("Starting wait for process monitor thread")
 
         self.logger.debug("The wait_for monitor is waiting to start")
 
@@ -1413,12 +1433,14 @@ class roadblock:
                             self.logger.info("Sending 'follower-waiting-complete' message")
                             self.message_publish("leader", self.message_build("leader", self.roadblock_leader_id, "follower-waiting-complete"))
 
-        self.logger.debug("The wait_for monitor is exiting")
+        self.logger.debug("Finishing the wait for process monitor thread")
 
         return self.RC_SUCCESS
 
     def wait_for_process_launcher(self):
         '''Handle the execution of a --wait-for program/script'''
+
+        self.logger.debug("Starting wait for process launcher thread")
 
         ret_val = -1
 
@@ -1437,7 +1459,7 @@ class roadblock:
                 self.logger.info("The wait-for process is now running")
 
                 self.wait_for_monitor_start.set()
-                wait_for_io_thread = threading.Thread(target = self.wait_for_process_io_handler, args = ())
+                wait_for_io_thread = threading.Thread(target = self.wait_for_process_io_handler, args = (), name = "wait_for_monitor")
                 wait_for_io_thread.start()
 
                 ret_val = self.wait_for_process.wait()
@@ -1450,6 +1472,8 @@ class roadblock:
 
         self.logger.info("The wait_for process exited with return code %d", ret_val)
 
+        self.logger.debug("Finishing wait for process launcher thread")
+
         return self.RC_SUCCESS
 
     def run_it(self):
@@ -1459,7 +1483,7 @@ class roadblock:
         self.logger.info("Roadblock UUID: %s", self.roadblock_uuid)
 
         if self.minor_abort_event is not None or self.major_abort_event is not None:
-            self.abort_event_thread = threading.Thread(target = self.abort_event_handler, args = ())
+            self.abort_event_thread = threading.Thread(target = self.abort_event_handler, args = (), name = "abort_event_thread")
             self.abort_event_thread.start()
 
         if len(self.roadblock_leader_id) == 0:
@@ -1517,7 +1541,7 @@ class roadblock:
         self.logger.info("Current Time: %s", datetime.datetime.utcfromtimestamp(mytime).strftime("%Y-%m-%d at %H:%M:%S UTC"))
 
         # set the default timeout
-        self.enable_timeout(self.roadblock_timeout, self.timeout_handler)
+        self.enable_timeout(self.roadblock_timeout, self.timeout_handler, "timeout_handler_1")
         cluster_timeout = mytime + self.roadblock_timeout
         self.logger.info("Timeout: %s", datetime.datetime.utcfromtimestamp(cluster_timeout).strftime("%Y-%m-%d at %H:%M:%S UTC"))
 
@@ -1526,8 +1550,8 @@ class roadblock:
             self.logger.info("Wait-For Task: %s", self.wait_for)
             self.logger.info("Wait-For Log: %s", self.wait_for_log)
             self.wait_for_monitor_start = threading.Event()
-            self.wait_for_launcher_thread = threading.Thread(target = self.wait_for_process_launcher, args = ())
-            self.wait_for_monitor_thread = threading.Thread(target = self.wait_for_process_monitor, args = ())
+            self.wait_for_launcher_thread = threading.Thread(target = self.wait_for_process_launcher, args = (), name = "wait_for_launcher")
+            self.wait_for_monitor_thread = threading.Thread(target = self.wait_for_process_monitor, args = (), name = "wait_for_monitor")
             self.wait_for_monitor_exit = threading.Event()
             self.wait_for_launcher_thread.start()
             self.wait_for_monitor_thread.start()
@@ -1566,7 +1590,7 @@ class roadblock:
 
         if self.connection_watchdog_state == "enabled":
             self.con_watchdog_exit = threading.Event()
-            self.con_watchdog = threading.Thread(target = self.connection_watchdog, args = ())
+            self.con_watchdog = threading.Thread(target = self.connection_watchdog, args = (), name = "connection_watchdog")
             self.con_watchdog.start()
 
         self.logger.info("Role: %s", self.roadblock_role)
@@ -1710,6 +1734,7 @@ class roadblock:
                                 ret_val = self.message_handle(msg)
                                 if ret_val:
                                     return ret_val
+        self.logger.debug("Exited watch bus loop")
 
         if self.rc == 0:
             self.cleanup()

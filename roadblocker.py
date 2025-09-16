@@ -177,7 +177,7 @@ def main():
     args = process_options()
 
     # log formatting variables
-    log_debug_format =  '[CODE][%(module)s %(funcName)s:%(lineno)d]\n[%(asctime)s][%(levelname) 8s] %(message)s'
+    log_debug_format =  '[CODE][%(module)s %(funcName)s:%(lineno)d]\n[%(asctime)s][%(levelname) 8s][%(threadName)s] %(message)s'
     log_normal_format = '[%(asctime)s][%(levelname) 8s] %(message)s'
 
     if args.log_level == 'debug':
