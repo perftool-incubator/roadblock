@@ -1254,12 +1254,13 @@ class roadblock:
         if len(self.followers["waiting"]) != 0:
             self.logger.critical("Failed ending current heartbeat monitoring period -> heartbeat timeout")
 
+            self.rc = self.RC_HEARTBEAT_TIMEOUT
+
             self.logger.info("Sending 'heartbeat-timeout' message")
             self.message_publish("followers", self.message_build("all", "all", "heartbeat-timeout"))
 
             self.timeout_internals()
 
-            self.rc = self.RC_HEARTBEAT_TIMEOUT
             return self.rc
         else:
             self.logger.info("Successfully ending current heartbeat monitoring period")
