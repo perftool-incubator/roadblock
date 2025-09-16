@@ -1653,29 +1653,30 @@ class roadblock:
                 break
 
             msgs = []
-            try:
-                if self.roadblock_role == "follower":
-                    msgs = self.redcon.xread(streams = {
-                        self.roadblock_uuid + "__bus__global": global_last_msg_id,
-                        self.roadblock_uuid + "__bus__followers": followers_last_msg_id,
-                        self.roadblock_uuid + "__bus__" + self.my_id: personal_last_msg_id
-                    }, block = 0)
-                elif self.roadblock_role == "leader":
-                    msgs = self.redcon.xread(streams = {
-                        self.roadblock_uuid + "__bus__global": global_last_msg_id,
-                        self.roadblock_uuid + "__bus__leader": leader_last_msg_id,
-                        self.roadblock_uuid + "__bus__" + self.my_id: personal_last_msg_id
-                    }, block = 0)
-            except redis.exceptions.ConnectionError as con_error:
-                if self.con_pool_state:
+            if self.con_pool_state:
+                try:
+                    if self.roadblock_role == "follower":
+                        msgs = self.redcon.xread(streams = {
+                            self.roadblock_uuid + "__bus__global": global_last_msg_id,
+                            self.roadblock_uuid + "__bus__followers": followers_last_msg_id,
+                            self.roadblock_uuid + "__bus__" + self.my_id: personal_last_msg_id
+                        }, block = 0)
+                    elif self.roadblock_role == "leader":
+                        msgs = self.redcon.xread(streams = {
+                            self.roadblock_uuid + "__bus__global": global_last_msg_id,
+                            self.roadblock_uuid + "__bus__leader": leader_last_msg_id,
+                            self.roadblock_uuid + "__bus__" + self.my_id: personal_last_msg_id
+                        }, block = 0)
+                except redis.exceptions.ConnectionError as con_error:
+                    if self.con_pool_state:
+                        self.logger.error("%s", con_error)
+                        self.logger.error("Bus read failed due to connection error!")
+                    else:
+                        self.logger.debug("%s", con_error)
+                        self.logger.debug("Bus read failed because the connection has been closed")
+                except redis.exceptions.TimeoutError as con_error:
                     self.logger.error("%s", con_error)
-                    self.logger.error("Bus read failed due to connection error!")
-                else:
-                    self.logger.debug("%s", con_error)
-                    self.logger.debug("Bus read failed because the connection has been closed")
-            except redis.exceptions.TimeoutError as con_error:
-                self.logger.error("%s", con_error)
-                self.logger.error("Bus read failed due to a timeout error!")
+                    self.logger.error("Bus read failed due to a timeout error!")
 
             if len(msgs) == 0:
                 time.sleep(0.001)
