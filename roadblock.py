@@ -93,7 +93,7 @@ class roadblock:
         self.watch_bus.set()
         self.leader_abort = threading.Event()
         self.leader_abort_waiting = False
-        self.roadblock_waiting = False
+        self.roadblock_waiting = threading.Event()
         self.follower_abort = False
         self.initiator_type = None
         self.initiator_id = None
@@ -831,7 +831,7 @@ class roadblock:
                 if msg_command == "follower-ready-abort":
                     self.leader_abort.set()
                 elif msg_command == "follower-ready-waiting":
-                    self.roadblock_waiting = True
+                    self.roadblock_waiting.set()
 
                     self.logger.info("Adding follower '%s' to the waiting list", msg_sender)
                     self.followers["busy_waiting"][msg_sender] = True
@@ -851,7 +851,7 @@ class roadblock:
                     if self.leader_abort.is_set():
                         self.logger.info("Sending 'all-abort' command")
                         self.message_publish("followers", self.message_build("all", "all", "all-abort"))
-                    elif self.roadblock_waiting:
+                    elif self.roadblock_waiting.is_set():
                         self.logger.info("Sending 'all-wait' command")
                         self.message_publish("followers", self.message_build("all", "all", "all-wait"))
 
@@ -1238,7 +1238,7 @@ class roadblock:
                 self.logger.critical("These followers never reached 'online': %s", self.get_followers_list(self.followers["online"]))
             elif len(self.followers["ready"]) != 0:
                 self.logger.critical("These followers never reached 'ready': %s", self.get_followers_list(self.followers["ready"]))
-            elif self.roadblock_waiting:
+            elif self.roadblock_waiting.is_set():
                 if len(self.followers["busy_waiting"]) != 0:
                     self.logger.critical("These followers were still 'busy waiting': %s", self.get_followers_list(self.followers["busy_waiting"]))
 
