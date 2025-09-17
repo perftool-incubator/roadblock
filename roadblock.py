@@ -68,8 +68,8 @@ class roadblock:
         # runtime variables
         self.abort_event_loop = threading.Event()
         self.abort_event_thread = None
-        self.minor_abort_event_processed = False
-        self.major_abort_event_processed = False
+        self.minor_abort_event_processed = threading.Event()
+        self.major_abort_event_processed = threading.Event()
         self.timeout_active = False
         self.timeout_thread = None
         self.con_pool = None
@@ -1324,7 +1324,7 @@ class roadblock:
 
             if self.major_abort_event is not None and self.major_abort_event.is_set():
                 self.major_abort_event.clear()
-                self.major_abort_event_processed = True
+                self.major_abort_event_processed.set()
 
                 self.logger.critical("Exiting due to a major abort event")
                 self.cleanup()
@@ -1335,7 +1335,7 @@ class roadblock:
                 self.rc = self.RC_ERROR
             elif self.minor_abort_event is not None and self.minor_abort_event.is_set():
                 self.minor_abort_event.clear()
-                self.minor_abort_event_processed = True
+                self.minor_abort_event_processed.set()
 
                 self.logger.warning("Attempting to abort due to a minor abort event")
                 self.leader_abort = True
@@ -1742,7 +1742,7 @@ class roadblock:
 
         self.logger.info("Exiting")
 
-        if self.major_abort_event_processed and self.rc != 0:
+        if self.major_abort_event_processed.is_set() and self.rc != 0:
             self.logger.critical("Roadblock Completed with a major abort event")
             return self.RC_ERROR
 
