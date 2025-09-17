@@ -85,7 +85,7 @@ class roadblock:
         self.wait_for_monitor_start = None
         self.wait_for_waiting = threading.Event()
         self.redcon = None
-        self.initiator = False
+        self.initiator = threading.Event()
         self.schema = None
         self.user_schema = None
         self.my_id = None
@@ -800,10 +800,10 @@ class roadblock:
                 if len(self.followers["online"]) == 0:
                     self.logger.info("Sending 'all-online' message")
                     self.message_publish("followers", self.message_build("all", "all", "all-online"))
-                    if self.initiator:
+                    if self.initiator.is_set():
                         self.send_user_messages()
         elif msg_command == "all-online":
-            if self.initiator:
+            if self.initiator.is_set():
                 self.logger.info("Initiator received 'all-online' message")
             else:
                 self.logger.info("Received 'all-online' message")
@@ -1223,7 +1223,7 @@ class roadblock:
             else:
                 self.logger.critical("The wait-for process object is missing")
 
-        if self.con_pool_active.is_set() and self.initiator:
+        if self.con_pool_active.is_set() and self.initiator.is_set():
             # set a persistent flag that the roadblock timed out so that
             # any late arriving members know that the roadblock has
             # already failed.  done by the first member since that is the
@@ -1616,7 +1616,7 @@ class roadblock:
         # check if the roadblock has been initialized yet
         if self.key_set(self.roadblock_uuid, mytime):
             # i am creating the roadblock
-            self.initiator = True
+            self.initiator.set()
             self.logger.info("Initiator: True")
 
             # create the streams/buses
