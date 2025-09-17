@@ -83,7 +83,7 @@ class roadblock:
         self.wait_for_monitor_thread = None
         self.wait_for_monitor_exit = None
         self.wait_for_monitor_start = None
-        self.wait_for_waiting = False
+        self.wait_for_waiting = threading.Event()
         self.redcon = None
         self.initiator = False
         self.schema = None
@@ -816,7 +816,7 @@ class roadblock:
                     self.message_publish("leader", self.message_build("leader", self.roadblock_leader_id, "follower-ready-abort"))
                 else:
                     if self.wait_for is not None and self.wait_for_process is not None and self.wait_for_process.poll() is None:
-                        self.wait_for_waiting = True
+                        self.wait_for_waiting.set()
                         self.logger.info("Sending 'follower-ready-waiting' message")
                         self.message_publish("leader", self.message_build("leader", self.roadblock_leader_id, "follower-ready-waiting"))
                     else:
@@ -1419,7 +1419,7 @@ class roadblock:
                     self.logger.info("The wait_for process has finished")
                     self.wait_for_monitor_exit.set()
 
-                    if self.wait_for_waiting:
+                    if self.wait_for_waiting.is_set():
                         if self.wait_for_process.returncode != 0:
                             self.wait_for_io_handler_exited.wait()
 
