@@ -70,7 +70,7 @@ class roadblock:
         self.abort_event_thread = None
         self.minor_abort_event_processed = threading.Event()
         self.major_abort_event_processed = threading.Event()
-        self.timeout_active = False
+        self.timeout_active = threading.Event()
         self.timeout_thread = None
         self.con_pool = None
         self.con_pool_state = False
@@ -271,17 +271,17 @@ class roadblock:
         self.timeout_thread = threading.Timer(seconds, timeout_function)
         self.timeout_thread.name = thread_name
         self.timeout_thread.start()
-        self.timeout_active = True
+        self.timeout_active.set()
 
         return self.RC_SUCCESS
 
     def disable_timeout(self):
         '''Disable an existing timeout thread'''
 
-        if self.timeout_thread is not None and self.timeout_active:
+        if self.timeout_thread is not None and self.timeout_active.is_set():
             self.logger.info("Disabling existing timeout")
             self.timeout_thread.cancel()
-            self.timeout_active = False
+            self.timeout_active.clear()
         else:
             self.logger.debug("No existing timeout to disable")
 
@@ -1141,8 +1141,7 @@ class roadblock:
 
         self.logger.info("Cleaning up")
 
-        if self.timeout_active:
-            self.disable_timeout()
+        self.disable_timeout()
 
         if self.wait_for is not None:
             self.logger.info("Closing wait_for monitor thread")
@@ -1295,7 +1294,7 @@ class roadblock:
 
         self.logger.debug("Starting timeout handler thread")
 
-        self.timeout_active = False
+        self.timeout_active.clear()
         self.do_timeout()
 
         self.logger.debug("Finishing timeout handler thread")
@@ -1307,7 +1306,7 @@ class roadblock:
 
         self.logger.debug("Starting heartbeat timeout handler thread")
 
-        self.timeout_active = False
+        self.timeout_active.clear()
         self.do_heartbeat_timeout()
 
         self.logger.debug("Finishing heartbeat timeout handler thread")
