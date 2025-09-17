@@ -89,7 +89,8 @@ class roadblock:
         self.schema = None
         self.user_schema = None
         self.my_id = None
-        self.watch_bus = True
+        self.watch_bus = threading.Event()
+        self.watch_bus.set()
         self.leader_abort = False
         self.leader_abort_waiting = False
         self.roadblock_waiting = False
@@ -942,7 +943,7 @@ class roadblock:
                 self.timeout_internals()
 
                 # signal myself to exit
-                self.watch_bus = False
+                self.watch_bus.clear()
 
                 self.rc = self.RC_HEARTBEAT_TIMEOUT
                 return self.rc
@@ -965,7 +966,7 @@ class roadblock:
                 self.message_publish("leader", self.message_build("leader", self.roadblock_leader_id, "follower-gone"))
 
                 # signal myself to exit
-                self.watch_bus = False
+                self.watch_bus.clear()
         elif msg_command == "follower-gone":
             if self.roadblock_role == "leader":
                 self.logger.debug("leader got a 'follower-gone' message")
@@ -987,7 +988,7 @@ class roadblock:
                     self.message_publish("followers", self.message_build("all", "all", "all-gone"))
 
                     # signal myself to exit
-                    self.watch_bus = False
+                    self.watch_bus.clear()
         elif msg_command == "initiator-info":
             self.initiator_type = self.message_get_sender_type(message)
             self.initiator_id = self.message_get_sender(message)
@@ -1329,7 +1330,7 @@ class roadblock:
                 self.cleanup()
 
                 # signal myself to exit
-                self.watch_bus = False
+                self.watch_bus.clear()
 
                 self.rc = self.RC_ERROR
             elif self.minor_abort_event is not None and self.minor_abort_event.is_set():
@@ -1671,7 +1672,7 @@ class roadblock:
         leader_last_msg_id = 0
         global_last_msg_id = 0
         personal_last_msg_id = 0
-        while self.watch_bus:
+        while self.watch_bus.is_set():
             if self.rc != 0:
                 self.logger.debug("self.rc != 0 --> breaking")
                 break
