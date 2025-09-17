@@ -73,7 +73,7 @@ class roadblock:
         self.timeout_active = threading.Event()
         self.timeout_thread = None
         self.con_pool = None
-        self.con_pool_state = False
+        self.con_pool_active = threading.Event()
         self.con_watchdog_exit = None
         self.con_watchdog = None
         self.wait_for_cmd = None
@@ -1151,7 +1151,7 @@ class roadblock:
             self.logger.info("Closing wait_for launcher thread")
             self.wait_for_launcher_thread.join()
 
-        if self.con_pool_state:
+        if self.con_pool_active.is_set():
             if self.roadblock_role == "leader":
                 self.logger.info("Removing db objects specific to this roadblock")
                 self.key_delete(self.roadblock_uuid)
@@ -1180,8 +1180,8 @@ class roadblock:
                 self.con_watchdog.join()
 
             self.logger.info("Closing connection pool")
+            self.con_pool_active.clear()
             self.con_pool.disconnect()
-            self.con_pool_state = False
 
         if self.message_log is not None:
             # if the message log is open then dump the message queue and
@@ -1223,7 +1223,7 @@ class roadblock:
             else:
                 self.logger.critical("The wait-for process object is missing")
 
-        if self.con_pool_state and self.initiator:
+        if self.con_pool_active.is_set() and self.initiator:
             # set a persistent flag that the roadblock timed out so that
             # any late arriving members know that the roadblock has
             # already failed.  done by the first member since that is the
@@ -1354,7 +1354,7 @@ class roadblock:
         while not self.con_watchdog_exit.is_set():
             time.sleep(1)
             try:
-                if self.con_pool_state:
+                if self.con_pool_active.is_set():
                     ping_begin = time.time_ns()
                     self.redcon.ping()
                     ping_end = time.time_ns()
@@ -1559,7 +1559,7 @@ class roadblock:
             self.logger.info("Wait-For: False")
 
         # create the redis connections
-        while not self.con_pool_state:
+        while not self.con_pool_active.is_set():
             try:
                 self.con_pool = redis.ConnectionPool(host = self.roadblock_redis_server,
                                                      password = self.roadblock_redis_password,
@@ -1569,7 +1569,7 @@ class roadblock:
                                                      health_check_interval = 0)
                 self.redcon = redis.Redis(connection_pool = self.con_pool)
                 self.redcon.ping()
-                self.con_pool_state = True
+                self.con_pool_active.set()
             except redis.exceptions.ResponseError as con_error:
                 match = re.search(r"WRONGPASS", str(con_error))
                 if match:
@@ -1677,7 +1677,7 @@ class roadblock:
                 break
 
             msgs = []
-            if self.con_pool_state:
+            if self.con_pool_active.is_set():
                 try:
                     if self.roadblock_role == "follower":
                         msgs = self.redcon.xread(streams = {
@@ -1692,7 +1692,7 @@ class roadblock:
                             self.roadblock_uuid + "__bus__" + self.my_id: personal_last_msg_id
                         }, block = 0)
                 except redis.exceptions.ConnectionError as con_error:
-                    if self.con_pool_state:
+                    if self.con_pool_active.is_set():
                         self.logger.error("%s", con_error)
                         self.logger.error("Bus read failed due to connection error!")
                     else:
