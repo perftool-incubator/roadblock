@@ -91,7 +91,7 @@ class roadblock:
         self.my_id = None
         self.watch_bus = threading.Event()
         self.watch_bus.set()
-        self.leader_abort = False
+        self.leader_abort = threading.Event()
         self.leader_abort_waiting = False
         self.roadblock_waiting = False
         self.follower_abort = False
@@ -829,7 +829,7 @@ class roadblock:
                 msg_sender = self.message_get_sender(message)
 
                 if msg_command == "follower-ready-abort":
-                    self.leader_abort = True
+                    self.leader_abort.set()
                 elif msg_command == "follower-ready-waiting":
                     self.roadblock_waiting = True
 
@@ -848,7 +848,7 @@ class roadblock:
                     self.logger.info("Sending 'all-ready' message")
                     self.message_publish("followers", self.message_build("all", "all", "all-ready"))
 
-                    if self.leader_abort:
+                    if self.leader_abort.is_set():
                         self.logger.info("Sending 'all-abort' command")
                         self.message_publish("followers", self.message_build("all", "all", "all-abort"))
                     elif self.roadblock_waiting:
@@ -900,7 +900,7 @@ class roadblock:
                     self.disable_timeout()
 
                     if self.waiting_failed:
-                        self.leader_abort = True
+                        self.leader_abort.set()
                         self.logger.info("Sending 'all-abort' command")
                         self.message_publish("followers", self.message_build("all", "all", "all-abort"))
                     else:
@@ -1337,7 +1337,7 @@ class roadblock:
                 self.minor_abort_event_processed.set()
 
                 self.logger.warning("Attempting to abort due to a minor abort event")
-                self.leader_abort = True
+                self.leader_abort.set()
 
             time.sleep(0.01)
             #time.sleep(1.0)
@@ -1495,7 +1495,7 @@ class roadblock:
                 self.logger.critical("There must be at least one follower")
                 return self.RC_INVALID_INPUT
             if self.abort:
-                self.leader_abort = True
+                self.leader_abort.set()
 
             # build some hashes for easy tracking of follower status
             for follower in self.roadblock_followers:
@@ -1753,7 +1753,7 @@ class roadblock:
             self.logger.critical("Roadblock Completed with a Waiting Abort")
             return self.RC_ABORT_WAITING
 
-        if self.leader_abort or self.follower_abort:
+        if self.leader_abort.is_set() or self.follower_abort:
             self.logger.critical("Roadblock Completed with an Abort")
             return self.RC_ABORT
 
