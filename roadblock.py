@@ -18,6 +18,84 @@ import lzma
 import redis
 import jsonschema
 
+class roadblock_dictionary:
+    '''a dictionary object class that is thread safe'''
+
+    def __init__(self, __dict = None):
+        '''roadblock_dictionary object initiator function'''
+
+        self._lock = threading.Lock()
+        with self._lock:
+            if __dict is None:
+                self._dict = {}
+            else:
+                self._dict = __dict
+
+    def __contains__(self, key):
+        '''check if key exists in the dictionary'''
+
+        with self._lock:
+            return key in self._dict
+
+    def __len__(self):
+        '''return the length of the dictionary'''
+
+        with self._lock:
+            return len(self._dict)
+
+    def __iter__(self):
+        '''iterate through the dictionary'''
+
+        with self._lock:
+            yield from self._dict
+
+    def __copy__(self):
+        '''return a copy of the object'''
+
+        with self._lock:
+            return roadblock_dictionary(self._dict.copy())
+
+    def __deepcopy__(self, memo):
+        '''return a deep copy of the object'''
+
+        with self._lock:
+            return roadblock_dictionary(copy.deepcopy(self._dict, memo))
+
+    def add(self, key, value):
+        '''add a key to the dictionary if it does not already exist'''
+
+        with self._lock:
+            if key in self._dict:
+                return False
+            else:
+                self._dict[key] = value
+                return True
+
+    def remove(self, key):
+        '''remove a key from teh dictionary if it exists'''
+
+        with self._lock:
+            if key in self._dict:
+                del self._dict[key]
+                return True
+            else:
+                return False
+
+    def get(self, key):
+        '''return a value for a key in the dictionary'''
+
+        with self._lock:
+            return self._dict[key]
+
+    def modify(self, key, value):
+        '''modify a key's value in the dictionary if it exists'''
+
+        with self._lock:
+            if key in self._dict:
+                self._dict[key] = value
+                return True
+            else:
+                return False
 
 class roadblock:
     '''roadblock object class'''
@@ -97,13 +175,13 @@ class roadblock:
         self.follower_abort = False
         self.initiator_type = None
         self.initiator_id = None
-        self.followers = { "online": {},
-                           "ready": {},
-                           "gone": {},
-                           "waiting": {},
-                           "waiting_backup": {},
-                           "busy_waiting": {} }
-        self.processed_messages = {}
+        self.followers = { "online": roadblock_dictionary(),
+                           "ready": roadblock_dictionary(),
+                           "gone": roadblock_dictionary(),
+                           "waiting": roadblock_dictionary(),
+                           "waiting_backup": roadblock_dictionary(),
+                           "busy_waiting": roadblock_dictionary() }
+        self.processed_messages = roadblock_dictionary()
         self.messages = { "sent": [],
                           "received": [] }
         self.message_log = None
@@ -755,7 +833,7 @@ class roadblock:
             return self.RC_SUCCESS
         else:
             self.logger.debug("adding uuid='%s' to the processed messages list", msg_uuid)
-            self.processed_messages[msg_uuid] = True
+            self.processed_messages.add(msg_uuid, True)
 
             if self.message_log is not None:
                 # if the message log is open then append messages to the queue
@@ -791,7 +869,7 @@ class roadblock:
 
                 if msg_sender in self.followers["online"]:
                     self.logger.info("Received 'follower-online' message from '%s'", msg_sender)
-                    del self.followers["online"][msg_sender]
+                    self.followers["online"].remove(msg_sender)
                 elif msg_sender in self.roadblock_followers:
                     self.logger.warning("Did I already process this 'follower-online' message from follower '%s'?", msg_sender)
                 else:
@@ -834,11 +912,11 @@ class roadblock:
                     self.roadblock_waiting.set()
 
                     self.logger.info("Adding follower '%s' to the waiting list", msg_sender)
-                    self.followers["busy_waiting"][msg_sender] = True
+                    self.followers["busy_waiting"].add(msg_sender, True)
 
                 if msg_sender in self.followers["ready"]:
                     self.logger.info("Received '%s' message from '%s'", msg_command, msg_sender)
-                    del self.followers["ready"][msg_sender]
+                    self.followers["ready"].remove(msg_sender)
                 elif msg_sender in self.roadblock_followers:
                     self.logger.warning("Received a redundant '%s' message from follower '%s'?", msg_command, msg_sender)
                 else:
@@ -889,7 +967,7 @@ class roadblock:
 
                 if msg_sender in self.followers["waiting"]:
                     self.logger.info("Received heartbeat from follower '%s'", msg_sender)
-                    del self.followers["waiting"][msg_sender]
+                    self.followers["waiting"].remove(msg_sender)
                 elif msg_sender in self.roadblock_followers:
                     self.logger.warning("Received a redundant heartbeat message from follower '%s'?", msg_sender)
                 else:
@@ -914,7 +992,7 @@ class roadblock:
 
                 if msg_sender in self.followers["busy_waiting"]:
                     self.logger.info("Follower '%s' is no longer busy waiting", msg_sender)
-                    del self.followers["busy_waiting"][msg_sender]
+                    self.followers["busy_waiting"].remove(msg_sender)
 
                     if msg_command == "follower-waiting-complete-failed":
                         self.waiting_failed = True
@@ -975,7 +1053,7 @@ class roadblock:
 
                 if msg_sender in self.followers["gone"]:
                     self.logger.info("Received 'follower-gone' message from '%s'", msg_sender)
-                    del self.followers["gone"][msg_sender]
+                    self.followers["gone"].remove(msg_sender)
                 elif msg_sender in self.roadblock_followers:
                     self.logger.warning("Received a redundant 'follower-gone' message from follower '%s'?", msg_sender)
                 else:
@@ -1499,11 +1577,11 @@ class roadblock:
 
             # build some hashes for easy tracking of follower status
             for follower in self.roadblock_followers:
-                self.followers["online"][follower] = True
-                self.followers["ready"][follower] = True
-                self.followers["gone"][follower] = True
-                self.followers["waiting"][follower] = True
-                self.followers["waiting_backup"][follower] = True
+                self.followers["online"].add(follower, True)
+                self.followers["ready"].add(follower, True)
+                self.followers["gone"].add(follower, True)
+                self.followers["waiting"].add(follower, True)
+                self.followers["waiting_backup"].add(follower, True)
 
         if self.roadblock_role == "follower":
             self.my_id = self.roadblock_follower_id
