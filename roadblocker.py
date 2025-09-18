@@ -13,6 +13,7 @@ import threading
 from pathlib import Path
 
 from roadblock import roadblock
+import roadblocker_config
 
 
 def process_options ():
@@ -152,27 +153,25 @@ def process_options ():
 
 def sigint_handler(signum, frame):
     '''Handle a SIGINT/CTRL-C'''
-    global sigint_counter
 
     if signum == 2: # SIGINT
-        logger.warning("Caught a SIGINT signal")
-        sigint_counter += 1
+        roadblocker_config.logger.warning("Caught a SIGINT signal")
+        roadblocker_config.sigint_counter += 1
 
-        if sigint_counter == 1:
-            logger.warning("SIGINT handler is procesing a minor abort event")
-            minor_abort_event.set()
+        if roadblocker_config.sigint_counter == 1:
+            roadblocker_config.logger.warning("SIGINT handler is procesing a minor abort event")
+            roadblocker_config.minor_abort_event.set()
         else:
-            logger.warning("SIGINT handler is processing a major abort event [%d]", sigint_counter)
-            major_abort_event.set()
+            roadblocker_config.logger.warning("SIGINT handler is processing a major abort event [%d]", roadblocker_config.sigint_counter)
+            roadblocker_config.major_abort_event.set()
     else:
-        logger.warning("SIGINT handler called with signal %d", signum)
+        roadblocker_config.logger.warning("SIGINT handler called with signal %d", signum)
 
     return 0
 
 
 def main():
     '''Main control block'''
-    global logger
 
     args = process_options()
 
@@ -185,7 +184,7 @@ def main():
     elif args.log_level == 'normal':
         logging.basicConfig(level = logging.INFO, format = log_normal_format, stream = sys.stdout)
 
-    logger = logging.getLogger(__file__)
+    roadblocker_config.logger = logging.getLogger(__file__)
 
     log_debug = False
     if args.log_level == "debug":
@@ -200,10 +199,10 @@ def main():
                 for line in followers_file:
                     followers.append(line.rstrip('\n'))
         except IOError:
-            logger.critical("Could not load the roadblock followers file '%s'!", args.roadblock_followers_file)
+            roadblocker_config.logger.critical("Could not load the roadblock followers file '%s'!", args.roadblock_followers_file)
             return 2
 
-    rb = roadblock(logger, log_debug)
+    rb = roadblock(roadblocker_config.logger, log_debug)
     rb.set_uuid(args.roadblock_uuid)
     rb.set_role(args.roadblock_role)
     rb.set_follower_id(args.roadblock_follower_id)
@@ -221,8 +220,11 @@ def main():
         rb.set_wait_for_cmd(shlex.split(args.wait_for))
     rb.set_wait_for_log(args.wait_for_log)
     rb.set_simulate_heartbeat_timeout(args.simulate_heartbeat_timeout)
-    rb.set_minor_abort_event(minor_abort_event)
-    rb.set_major_abort_event(major_abort_event)
+
+    roadblocker_config.minor_abort_event = threading.Event()
+    roadblocker_config.major_abort_event = threading.Event()
+    rb.set_minor_abort_event(roadblocker_config.minor_abort_event)
+    rb.set_major_abort_event(roadblocker_config.major_abort_event)
 
     #catch SIGINT/CTRL-C
     signal.signal(signal.SIGINT, sigint_handler)
@@ -230,8 +232,4 @@ def main():
     return rb.run_it()
 
 if __name__ == "__main__":
-    logger = None
-    minor_abort_event = threading.Event()
-    major_abort_event = threading.Event()
-    sigint_counter = 0
     sys.exit(main())
