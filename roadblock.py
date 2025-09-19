@@ -18,6 +18,84 @@ import lzma
 import redis
 import jsonschema
 
+class roadblock_json_encoder(json.JSONEncoder):
+    '''a custom json encoder to handle the custom classes'''
+
+    def default(self, o):
+        '''override the default encoder from the parent class'''
+
+        if isinstance(o, roadblock_list):
+            return o.list()
+
+        return json.JSONEncoder.default(self, o)
+
+class roadblock_list:
+    '''a list object class that is thread safe'''
+
+    def __init__(self, __list = None):
+        '''roadblock_list object initiator function'''
+
+        self._lock = threading.Lock()
+        with self._lock:
+            if __list is None:
+                self._list = []
+            else:
+                self._list = __list
+
+    def __contains__(self, item):
+        '''check if the item is in the list'''
+
+        with self._lock:
+            return item in self._list
+
+    def __len__(self):
+        '''return the length of the list'''
+
+        with self._lock:
+            return len(self._list)
+
+    def __iter__(self):
+        '''iterate through the list'''
+
+        with self._lock:
+            yield from self._list
+
+    def __copy__(self):
+        '''return a copy of the object'''
+
+        with self._lock:
+            return roadblock_list(self._list.copy())
+
+    def __deepcopy__(self, memo):
+        '''return a deep copy of the object'''
+
+        with self._lock:
+            return roadblock_list(copy.deepcopy(self._list, memo))
+
+    def append(self, item):
+        '''add an item to the end of the list'''
+
+        with self._lock:
+            return self._list.append(item)
+
+    def get(self, index):
+        '''return the item at a specific index'''
+
+        with self._lock:
+            return self._list[index]
+
+    def extend(self, __list):
+        '''extend the list by adding another list'''
+
+        with self._lock:
+            return self._list.extend(__list)
+
+    def list(self):
+        '''get the list for external usage'''
+
+        with self._lock:
+            return copy.deepcopy(self._list)
+
 class roadblock_dictionary:
     '''a dictionary object class that is thread safe'''
 
@@ -182,8 +260,8 @@ class roadblock:
                            "waiting_backup": roadblock_dictionary(),
                            "busy_waiting": roadblock_dictionary() }
         self.processed_messages = roadblock_dictionary()
-        self.messages = { "sent": [],
-                          "received": [] }
+        self.messages = { "sent": roadblock_list(),
+                          "received": roadblock_list() }
         self.message_log = None
         self.user_messages = []
         self.log = None
@@ -1264,7 +1342,7 @@ class roadblock:
         if self.message_log is not None:
             # if the message log is open then dump the message queue and
             # close the file handle
-            print(f"{json.dumps(self.messages, indent = 4, separators=(',', ': '), sort_keys = False)}\n", file=self.message_log)
+            print(f"{json.dumps(self.messages, cls = roadblock_json_encoder, indent = 4, separators=(',', ': '), sort_keys = False)}\n", file=self.message_log)
             self.message_log.close()
 
         self.logger.debug("Processed Messages:")
