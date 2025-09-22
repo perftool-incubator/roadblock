@@ -138,10 +138,15 @@ if pushd ${REPO_DIR} > /dev/null; then
     # start the roadblock leader container
     echo -e "\nStarting the roadblock leader container"
     SLEEP_TIME=0
-    if [ "${RANDOMIZE_INITIATOR}" == "1" -a ${LEADER_SIGINT_TEST} -eq 0 ]; then
+    if [ "${RANDOMIZE_INITIATOR}" == "1" -a ${LEADER_SIGINT_TEST} -eq 0 -a ${WAIT_FOR_HEARTBEAT_TIMEOUT_TEST} -eq 0 ]; then
         # don't randomize the container startup if doing a SIGINT test
         # so that we can be sure that we know when a container is
         # alive to send it a signal
+
+        # don't randomize the container startup if doing a heartbeat
+        # timeout test because we need the leader to start before the
+        # container that will fail to send the heartbeat (otherwise it
+        # might not time out)
 
 	SLEEP_TIME=$((RANDOM%20))
     fi
@@ -192,7 +197,7 @@ if pushd ${REPO_DIR} > /dev/null; then
                 WAIT_FOR_RC=1
             fi
             if [ "${WAIT_FOR_TEST}" == "1" -o "${WAIT_FOR_HEARTBEAT_TIMEOUT_TEST}" == "1" -o "${WAIT_FOR_ABORT_TEST}" == "1" ]; then
-                WAIT_FOR_ARGS="--wait-for '/opt/roadblock/wait-for-script.sh 45 ${WAIT_FOR_RC}' --wait-for-log /tmp/roadblock.wait-for.log"
+                WAIT_FOR_ARGS="--wait-for '/opt/roadblock/wait-for-script.sh 50 ${WAIT_FOR_RC}' --wait-for-log /tmp/roadblock.wait-for.log"
                 WAIT_FOR_CHECK="echo -e \"\nRoadblock --wait-for Log:\"; cat /tmp/roadblock.wait-for.log;"
             fi
         elif [ "${i}" == "2" ]; then
