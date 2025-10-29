@@ -761,7 +761,6 @@ class roadblock:
                                         "personal-bus-created",
                                         "timeout-ts",
                                         "initialized",
-                                        "switch-buses",
                                         "leader-online",
                                         "follower-online",
                                         "all-online",
