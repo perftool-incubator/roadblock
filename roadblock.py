@@ -1071,6 +1071,7 @@ class roadblock:
                     self.followers["busy_waiting"].remove(msg_sender)
 
                     if msg_command == "follower-waiting-complete-failed":
+                        self.logger.warning("Follower '%s' completed waiting but failed", msg_sender)
                         self.waiting_failed = True
                 elif msg_sender in self.roadblock_followers:
                     self.logger.warning("Received '%s' from a follower '%s' that is not busy waiting?", msg_command, msg_sender)
