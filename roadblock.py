@@ -1744,7 +1744,9 @@ class roadblock:
                 self.logger.error("Redis connection could not be opened due to a timeout error!")
                 time.sleep(3)
 
+        self.logger.info("Connection watchdog: %s", self.connection_watchdog_state)
         if self.connection_watchdog_state == "enabled":
+            self.logger.debug("Creating connection watchdog")
             self.con_watchdog_exit = threading.Event()
             self.con_watchdog = threading.Thread(target = self.connection_watchdog, args = (), name = "connection_watchdog")
             self.con_watchdog.start()
