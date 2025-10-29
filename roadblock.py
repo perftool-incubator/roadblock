@@ -203,7 +203,6 @@ class roadblock:
 
         # parameters
         self.roadblock_role = None
-        self.my_id = None
         self.roadblock_uuid = None
         self.message_validation = "all"
         self.connection_watchdog_state = "disabled"
