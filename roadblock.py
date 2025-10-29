@@ -1862,6 +1862,8 @@ class roadblock:
             if len(msgs) == 0:
                 time.sleep(0.001)
             else:
+                self.logger.debug("retrieved messages from %d streams", len(msgs))
+
                 for stream in msgs:
                     stream_name = stream[0].decode()
 
