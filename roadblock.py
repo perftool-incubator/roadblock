@@ -244,8 +244,8 @@ class roadblock:
         self.schema = None
         self.user_schema = None
         self.my_id = None
-        self.watch_bus = threading.Event()
-        self.watch_bus.set()
+        self.watch_stream = threading.Event()
+        self.watch_stream.set()
         self.leader_abort = threading.Event()
         self.leader_abort_waiting = False
         self.roadblock_waiting = threading.Event()
@@ -755,10 +755,10 @@ class roadblock:
                                 "command": {
                                     "type": "string",
                                     "enum": [
-                                        "global-bus-created",
-                                        "leader-bus-created",
-                                        "followers-bus-created",
-                                        "personal-bus-created",
+                                        "global-stream-created",
+                                        "leader-stream-created",
+                                        "followers-stream-created",
+                                        "personal-stream-created",
                                         "timeout-ts",
                                         "initialized",
                                         "leader-online",
@@ -885,16 +885,16 @@ class roadblock:
             self.logger.info("Sending user requested messages")
             user_msg_counter = 1
             for user_msg in self.user_messages:
-                bus_name = "global"
+                stream_name = "global"
                 if user_msg["recipient"]["id"] != "all":
-                    bus_name = user_msg["recipient"]["id"]
+                    stream_name = user_msg["recipient"]["id"]
 
                 if "user-string" in user_msg:
                     self.logger.info("Sending user message %d: 'user-string'", user_msg_counter)
-                    self.message_publish(bus_name, self.message_build(user_msg["recipient"]["type"], user_msg["recipient"]["id"], "user-string", user_msg["user-string"]))
+                    self.stream_add(stream_name, self.message_build(user_msg["recipient"]["type"], user_msg["recipient"]["id"], "user-string", user_msg["user-string"]))
                 elif "user-object" in user_msg:
                     self.logger.info("Sending user message %d: 'user-object'", user_msg_counter)
-                    self.message_publish(bus_name, self.message_build(user_msg["recipient"]["type"], user_msg["recipient"]["id"], "user-object", user_msg["user-object"]))
+                    self.stream_add(stream_name, self.message_build(user_msg["recipient"]["type"], user_msg["recipient"]["id"], "user-object", user_msg["user-object"]))
 
                 user_msg_counter += 1
 
@@ -918,7 +918,7 @@ class roadblock:
 
         msg_command = self.message_get_command(message)
 
-        if msg_command in ("global-bus-created", "leader-bus-created", "followers-bus-created", "personal-bus-created"):
+        if msg_command in ("global-stream-created", "leader-stream-created", "followers-stream-created", "personal-stream-created"):
             self.logger.info("Received '%s' message", msg_command)
         elif msg_command == "timeout-ts":
             self.logger.info("Received 'timeout-ts' message")
@@ -953,7 +953,7 @@ class roadblock:
 
                 if len(self.followers["online"]) == 0:
                     self.logger.info("Sending 'all-online' message")
-                    self.message_publish("followers", self.message_build("all", "all", "all-online"))
+                    self.stream_add("followers", self.message_build("all", "all", "all-online"))
                     if self.initiator.is_set():
                         self.send_user_messages()
         elif msg_command == "all-online":
@@ -967,15 +967,15 @@ class roadblock:
             if self.roadblock_role == "follower":
                 if self.abort:
                     self.logger.info("Sending 'follower-ready-abort' message")
-                    self.message_publish("leader", self.message_build("leader", self.roadblock_leader_id, "follower-ready-abort"))
+                    self.stream_add("leader", self.message_build("leader", self.roadblock_leader_id, "follower-ready-abort"))
                 else:
                     if self.wait_for is not None and self.wait_for_process is not None and self.wait_for_process.poll() is None:
                         self.wait_for_waiting.set()
                         self.logger.info("Sending 'follower-ready-waiting' message")
-                        self.message_publish("leader", self.message_build("leader", self.roadblock_leader_id, "follower-ready-waiting"))
+                        self.stream_add("leader", self.message_build("leader", self.roadblock_leader_id, "follower-ready-waiting"))
                     else:
                         self.logger.info("Sending 'follower-ready' message")
-                        self.message_publish("leader", self.message_build("leader", self.roadblock_leader_id, "follower-ready"))
+                        self.stream_add("leader", self.message_build("leader", self.roadblock_leader_id, "follower-ready"))
         elif msg_command in ("follower-ready", "follower-ready-abort", "follower-ready-waiting"):
             if self.roadblock_role == "leader":
                 self.logger.debug("leader got a '%s' message", msg_command)
@@ -1000,14 +1000,14 @@ class roadblock:
 
                 if len(self.followers["ready"]) == 0:
                     self.logger.info("Sending 'all-ready' message")
-                    self.message_publish("followers", self.message_build("all", "all", "all-ready"))
+                    self.stream_add("followers", self.message_build("all", "all", "all-ready"))
 
                     if self.leader_abort.is_set():
                         self.logger.info("Sending 'all-abort' command")
-                        self.message_publish("followers", self.message_build("all", "all", "all-abort"))
+                        self.stream_add("followers", self.message_build("all", "all", "all-abort"))
                     elif self.roadblock_waiting.is_set():
                         self.logger.info("Sending 'all-wait' command")
-                        self.message_publish("followers", self.message_build("all", "all", "all-wait"))
+                        self.stream_add("followers", self.message_build("all", "all", "all-wait"))
 
                         self.logger.info("Disabling original timeout handler")
                         self.disable_timeout()
@@ -1016,10 +1016,10 @@ class roadblock:
                         self.enable_timeout(self.heartbeat_timeout, self.heartbeat_handler, "heartbeat_handler_1")
 
                         self.logger.info("Sending 'leader-heartbeat' message")
-                        self.message_publish("followers", self.message_build("all", "all", "leader-heartbeat"))
+                        self.stream_add("followers", self.message_build("all", "all", "leader-heartbeat"))
                     else:
                         self.logger.info("Sending 'all-go' command")
-                        self.message_publish("followers", self.message_build("all", "all", "all-go"))
+                        self.stream_add("followers", self.message_build("all", "all", "all-go"))
         elif msg_command == "all-wait":
             if self.roadblock_role == "follower":
                 self.logger.info("Received 'all-wait' message")
@@ -1034,7 +1034,7 @@ class roadblock:
                     self.logger.critical("Not sending 'follower-heartbeat' because of heartbeat timeout simulation request")
                 else:
                     self.logger.info("Sending 'follower-heartbeat' message")
-                    self.message_publish("leader", self.message_build("leader", self.roadblock_leader_id, "follower-heartbeat"))
+                    self.stream_add("leader", self.message_build("leader", self.roadblock_leader_id, "follower-heartbeat"))
         elif msg_command  == "follower-heartbeat":
             if self.roadblock_role == "leader":
                 self.logger.info("Received '%s' message", msg_command)
@@ -1056,10 +1056,10 @@ class roadblock:
                     if self.waiting_failed:
                         self.leader_abort.set()
                         self.logger.info("Sending 'all-abort' command")
-                        self.message_publish("followers", self.message_build("all", "all", "all-abort"))
+                        self.stream_add("followers", self.message_build("all", "all", "all-abort"))
                     else:
                         self.logger.info("Sending 'all-go' command")
-                        self.message_publish("followers", self.message_build("all", "all", "all-go"))
+                        self.stream_add("followers", self.message_build("all", "all", "all-go"))
         elif msg_command in ("follower-waiting-complete", "follower-waiting-complete-failed"):
             if self.roadblock_role == "leader":
                 self.logger.info("Received '%s' message", msg_command)
@@ -1085,10 +1085,10 @@ class roadblock:
                     if self.waiting_failed:
                         self.leader_abort_waiting = True
                         self.logger.info("Sending 'all-abort' command")
-                        self.message_publish("followers", self.message_build("all", "all", "all-abort"))
+                        self.stream_add("followers", self.message_build("all", "all", "all-abort"))
                     else:
                         self.logger.info("Sending 'all-go' command")
-                        self.message_publish("followers", self.message_build("all", "all", "all-go"))
+                        self.stream_add("followers", self.message_build("all", "all", "all-go"))
         elif msg_command == "heartbeat-timeout":
             if self.roadblock_role == "follower":
                 self.logger.info("Received '%s' message", msg_command)
@@ -1098,7 +1098,7 @@ class roadblock:
                 self.timeout_internals()
 
                 # signal myself to exit
-                self.watch_bus.clear()
+                self.watch_stream.clear()
 
                 self.rc = self.RC_HEARTBEAT_TIMEOUT
                 return self.rc
@@ -1118,10 +1118,10 @@ class roadblock:
 
                 # tell the leader that I'm gone
                 self.logger.info("Sending 'follower-gone' message")
-                self.message_publish("leader", self.message_build("leader", self.roadblock_leader_id, "follower-gone"))
+                self.stream_add("leader", self.message_build("leader", self.roadblock_leader_id, "follower-gone"))
 
                 # signal myself to exit
-                self.watch_bus.clear()
+                self.watch_stream.clear()
         elif msg_command == "follower-gone":
             if self.roadblock_role == "leader":
                 self.logger.debug("leader got a 'follower-gone' message")
@@ -1140,10 +1140,10 @@ class roadblock:
                     # send a message that will probably not be observed by
                     # anyone...but just in case...
                     self.logger.info("Sending 'all-gone' message")
-                    self.message_publish("followers", self.message_build("all", "all", "all-gone"))
+                    self.stream_add("followers", self.message_build("all", "all", "all-gone"))
 
                     # signal myself to exit
-                    self.watch_bus.clear()
+                    self.watch_stream.clear()
         elif msg_command == "initiator-info":
             self.initiator_type = self.message_get_sender_type(message)
             self.initiator_id = self.message_get_sender(message)
@@ -1151,13 +1151,13 @@ class roadblock:
 
         return self.RC_SUCCESS
 
-    def message_publish(self, message_bus, message):
-        '''Publish messages for subscribers to receive'''
+    def stream_add(self, stream_name, message):
+        '''Add a message to a stream, creating the stream if necessary'''
 
         ret_val = 0
         counter = 0
 
-        self.logger.debug("Attempting to publish message '%s' on bus '%s'", message, message_bus)
+        self.logger.debug("Attempting to add message '%s' to stream '%s'", message, stream_name)
 
         while ret_val == 0:
             if self.rc != 0:
@@ -1167,25 +1167,25 @@ class roadblock:
             counter += 1
 
             try:
-                ret_val = self.redcon.xadd(self.roadblock_uuid + "__bus__" + message_bus, { 'msg': self.message_to_str(message) })
+                ret_val = self.redcon.xadd(self.roadblock_uuid + "__stream__" + stream_name, { 'msg': self.message_to_str(message) })
             except redis.exceptions.ConnectionError as con_error:
                 self.logger.error("%s", con_error)
-                self.logger.error("Bus add to '%s' failed due to connection error!", message_bus)
+                self.logger.error("Stream add to '%s' failed due to connection error!", stream_name)
             except redis.exceptions.TimeoutError as con_error:
                 self.logger.error("%s", con_error)
-                self.logger.error("Bus add to '%s' failed due to a timeout error!", message_bus)
+                self.logger.error("Stream add to '%s' failed due to a timeout error!", stream_name)
 
             if ret_val is None:
-                self.logger.warning("Failed attempt %d to publish message '%s' to bus '%s'", counter, message, message_bus)
+                self.logger.warning("Failed attempt %d to add message '%s' to stream '%s'", counter, message, stream_name)
 
                 self.backoff(counter)
             else:
-                self.logger.debug("Message '%s' was sent on the %d attempt with message ID '%s' on bus '%s'", message, counter, ret_val, message_bus)
+                self.logger.debug("Message '%s' was sent on the %d attempt with message ID '%s' on stream '%s'", message, counter, ret_val, stream_name)
 
         if self.message_log is not None:
             # if the message log is open then append messages to the queue
             # for later dumping
-            # do something bus specific here
+            # do something stream specific here
             self.messages["sent"].append(message)
 
         return self.RC_SUCCESS
@@ -1312,22 +1312,22 @@ class roadblock:
                 self.key_delete(self.roadblock_uuid)
                 self.key_delete(self.roadblock_uuid + "__initialized")
 
-                buses_to_clean = []
-                for bus_name in ( "global", "leader", "followers" ):
-                    buses_to_clean.append(bus_name)
-                buses_to_clean.append(self.roadblock_leader_id)
-                for bus_name in self.roadblock_followers:
-                    buses_to_clean.append(bus_name)
+                streams_to_clean = []
+                for stream_name in ( "global", "leader", "followers" ):
+                    streams_to_clean.append(stream_name)
+                streams_to_clean.append(self.roadblock_leader_id)
+                for stream_name in self.roadblock_followers:
+                    streams_to_clean.append(stream_name)
 
-                for bus_name in buses_to_clean:
-                    msg_count = self.redcon.xlen(self.roadblock_uuid + "__bus__" + bus_name)
-                    self.logger.debug("total messages on bus '%s': %d", bus_name, msg_count)
+                for stream_name in streams_to_clean:
+                    msg_count = self.redcon.xlen(self.roadblock_uuid + "__stream__" + stream_name)
+                    self.logger.debug("total messages on stream '%s': %d", stream_name, msg_count)
 
-                    msgs_trimmed = self.redcon.xtrim(self.roadblock_uuid + "__bus__" + bus_name, maxlen = 0, approximate = False)
-                    self.logger.debug("total messages deleted from bus '%s': %d", bus_name, msgs_trimmed)
+                    msgs_trimmed = self.redcon.xtrim(self.roadblock_uuid + "__stream__" + stream_name, maxlen = 0, approximate = False)
+                    self.logger.debug("total messages deleted from stream '%s': %d", stream_name, msgs_trimmed)
 
-                    msg_count = self.redcon.xlen(self.roadblock_uuid + "__bus__" + bus_name)
-                    self.logger.debug("total messages on bus '%s': %d", bus_name, msg_count)
+                    msg_count = self.redcon.xlen(self.roadblock_uuid + "__stream__" + stream_name)
+                    self.logger.debug("total messages on stream '%s': %d", stream_name, msg_count)
 
             if self.connection_watchdog_state == "enabled":
                 self.logger.info("Closing connection pool watchdog")
@@ -1413,7 +1413,7 @@ class roadblock:
             self.rc = self.RC_HEARTBEAT_TIMEOUT
 
             self.logger.info("Sending 'heartbeat-timeout' message")
-            self.message_publish("followers", self.message_build("all", "all", "heartbeat-timeout"))
+            self.stream_add("followers", self.message_build("all", "all", "heartbeat-timeout"))
 
             self.timeout_internals()
 
@@ -1426,7 +1426,7 @@ class roadblock:
             self.followers["waiting"] = copy.deepcopy(self.followers["waiting_backup"])
 
             self.logger.info("Sending 'leader-heartbeat' message")
-            self.message_publish("followers", self.message_build("all", "all", "leader-heartbeat"))
+            self.stream_add("followers", self.message_build("all", "all", "leader-heartbeat"))
 
             self.logger.info("Starting new heartbeat monitoring period")
             self.enable_timeout(self.heartbeat_timeout, self.heartbeat_handler, "heartbeat_handler_2")
@@ -1484,7 +1484,7 @@ class roadblock:
                 self.cleanup()
 
                 # signal myself to exit
-                self.watch_bus.clear()
+                self.watch_stream.clear()
 
                 self.rc = self.RC_ERROR
             elif self.minor_abort_event is not None and self.minor_abort_event.is_set():
@@ -1583,10 +1583,10 @@ class roadblock:
                                 log_contents = str(base64.b64encode(lzma.compress(wait_for_log_fh.read().encode("ascii"))), "ascii")
 
                             self.logger.critical("Sending 'follower-waiting-complete-failed' message")
-                            self.message_publish("leader", self.message_build("leader", self.roadblock_leader_id, "follower-waiting-complete-failed", value = log_contents))
+                            self.stream_add("leader", self.message_build("leader", self.roadblock_leader_id, "follower-waiting-complete-failed", value = log_contents))
                         else:
                             self.logger.info("Sending 'follower-waiting-complete' message")
-                            self.message_publish("leader", self.message_build("leader", self.roadblock_leader_id, "follower-waiting-complete"))
+                            self.stream_add("leader", self.message_build("leader", self.roadblock_leader_id, "follower-waiting-complete"))
 
         self.logger.debug("Finishing the wait for process monitor thread")
 
@@ -1776,19 +1776,19 @@ class roadblock:
             self.initiator.set()
             self.logger.info("Initiator: True")
 
-            # create the streams/buses
-            self.logger.info("Creating buses")
-            self.message_publish("global", self.message_build("all", "all", "global-bus-created"))
-            self.message_publish("leader", self.message_build("leader", self.roadblock_leader_id, "leader-bus-created"))
-            self.message_publish("followers", self.message_build("all", "all", "followers-bus-created"))
+            # create the streams by adding the first message
+            self.logger.info("Creating consumer groups and streams")
+            self.stream_add("global", self.message_build("all", "all", "global-stream-created"))
+            self.stream_add("leader", self.message_build("leader", self.roadblock_leader_id, "leader-stream-created"))
+            self.stream_add("followers", self.message_build("all", "all", "followers-stream-created"))
 
-            # publish the cluster timeout
+            # share the cluster timeout
             self.logger.info("Sending 'timeout-ts' message")
-            self.message_publish("global", self.message_build("all", "all", "timeout-ts", cluster_timeout))
+            self.stream_add("global", self.message_build("all", "all", "timeout-ts", cluster_timeout))
 
-            # publish the initiator information
+            # share the initiator information
             self.logger.info("Sending 'initiator-info' message")
-            self.message_publish("global", self.message_build("all", "all", "initiator-info"))
+            self.stream_add("global", self.message_build("all", "all", "initiator-info"))
             self.initiator_type = self.roadblock_role
             self.initiator_id = self.my_id
 
@@ -1811,24 +1811,24 @@ class roadblock:
 
             self.logger.info("Roadblock is initialized")
 
-        # create the personal stream/bus
-        self.logger.info("Creating personal bus")
-        self.message_publish(self.my_id, self.message_build_custom(self.roadblock_role, "personal-bus-created", self.roadblock_role, self.my_id, "personal-bus-created"))
+        # create the personal stream
+        self.logger.info("Creating personal stream")
+        self.stream_add(self.my_id, self.message_build_custom(self.roadblock_role, "personal-stream-created", self.roadblock_role, self.my_id, "personal-stream-created"))
 
         if self.roadblock_role == "follower":
             # tell the leader that I am online
-            self.logger.info("Sending 'follower-online' message")
-            self.message_publish("leader", self.message_build("leader", self.roadblock_leader_id, "follower-online"))
+            self.logger.info("Sending 'follower-online' message to the leader")
+            self.stream_add("leader", self.message_build("leader", self.roadblock_leader_id, "follower-online"))
         elif self.roadblock_role == "leader":
-            # tell everyone that the leader is online
-            self.logger.info("Sending 'leader-online' message")
-            self.message_publish("followers", self.message_build("all", "all", "leader-online"))
+            # tell the followers that the leader is online
+            self.logger.info("Sending 'leader-online' message to the followers")
+            self.stream_add("followers", self.message_build("all", "all", "leader-online"))
 
         followers_last_msg_id = 0
         leader_last_msg_id = 0
         global_last_msg_id = 0
         personal_last_msg_id = 0
-        while self.watch_bus.is_set():
+        while self.watch_stream.is_set():
             if self.rc != 0:
                 self.logger.debug("self.rc != 0 --> breaking")
                 break
@@ -1838,46 +1838,46 @@ class roadblock:
                 try:
                     if self.roadblock_role == "follower":
                         msgs = self.redcon.xread(streams = {
-                            self.roadblock_uuid + "__bus__global": global_last_msg_id,
-                            self.roadblock_uuid + "__bus__followers": followers_last_msg_id,
-                            self.roadblock_uuid + "__bus__" + self.my_id: personal_last_msg_id
+                            self.roadblock_uuid + "__stream__global": global_last_msg_id,
+                            self.roadblock_uuid + "__stream__followers": followers_last_msg_id,
+                            self.roadblock_uuid + "__stream__" + self.my_id: personal_last_msg_id
                         }, block = 0)
                     elif self.roadblock_role == "leader":
                         msgs = self.redcon.xread(streams = {
-                            self.roadblock_uuid + "__bus__global": global_last_msg_id,
-                            self.roadblock_uuid + "__bus__leader": leader_last_msg_id,
-                            self.roadblock_uuid + "__bus__" + self.my_id: personal_last_msg_id
+                            self.roadblock_uuid + "__stream__global": global_last_msg_id,
+                            self.roadblock_uuid + "__stream__leader": leader_last_msg_id,
+                            self.roadblock_uuid + "__stream__" + self.my_id: personal_last_msg_id
                         }, block = 0)
                 except redis.exceptions.ConnectionError as con_error:
                     if self.con_pool_active.is_set():
                         self.logger.error("%s", con_error)
-                        self.logger.error("Bus read failed due to connection error!")
+                        self.logger.error("Stream read failed due to connection error!")
                     else:
                         self.logger.debug("%s", con_error)
-                        self.logger.debug("Bus read failed because the connection has been closed")
+                        self.logger.debug("Stream read failed because the connection has been closed")
                 except redis.exceptions.TimeoutError as con_error:
                     self.logger.error("%s", con_error)
-                    self.logger.error("Bus read failed due to a timeout error!")
+                    self.logger.error("Stream read failed due to a timeout error!")
 
             if len(msgs) == 0:
                 time.sleep(0.001)
             else:
-                for bus in msgs:
-                    bus_name = bus[0].decode()
+                for stream in msgs:
+                    stream_name = stream[0].decode()
 
-                    self.logger.debug("retrieved %d messages from bus '%s' for processing", len(bus[1]), bus_name)
+                    self.logger.debug("retrieved %d messages from stream '%s' for processing", len(stream[1]), stream_name)
 
-                    for msg_id, msg in bus[1]:
-                        if bus_name == self.roadblock_uuid + "__bus__global":
+                    for msg_id, msg in stream[1]:
+                        if stream_name == self.roadblock_uuid + "__stream__global":
                             global_last_msg_id = msg_id
-                        elif bus_name == self.roadblock_uuid + "__bus__leader":
+                        elif stream_name == self.roadblock_uuid + "__stream__leader":
                             leader_last_msg_id = msg_id
-                        elif bus_name == self.roadblock_uuid + "__bus__followers":
+                        elif stream_name == self.roadblock_uuid + "__stream__followers":
                             followers_last_msg_id = msg_id
-                        elif bus_name == self.roadblock_uuid + "__bus__" + self.my_id:
+                        elif stream_name == self.roadblock_uuid + "__stream__" + self.my_id:
                             personal_last_msg_id = msg_id
 
-                        self.logger.debug("received msg=[%s] with msg_id=[%s] from bus '%s'", msg, msg_id, bus_name)
+                        self.logger.debug("received msg=[%s] with msg_id=[%s] from stream '%s'", msg, msg_id, stream_name)
 
                         msg = self.message_from_str(msg[b"msg"].decode())
 
@@ -1891,7 +1891,7 @@ class roadblock:
                                 ret_val = self.message_handle(msg)
                                 if ret_val:
                                     return ret_val
-        self.logger.debug("Exited watch bus loop")
+        self.logger.debug("Exited watch stream loop")
 
         if self.rc == 0:
             self.cleanup()
