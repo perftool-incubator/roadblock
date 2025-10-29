@@ -1870,16 +1870,20 @@ class roadblock:
                     self.logger.debug("retrieved %d messages from stream '%s' for processing", len(stream[1]), stream_name)
 
                     for msg_id, msg in stream[1]:
+                        self.logger.debug("received msg=[%s] with msg_id=[%s] from stream '%s'", msg, msg_id, stream_name)
+
                         if stream_name == self.roadblock_uuid + "__stream__global":
                             global_last_msg_id = msg_id
+                            self.logger.debug("global_last_msg_id is now '%s'", global_last_msg_id)
                         elif stream_name == self.roadblock_uuid + "__stream__leader":
                             leader_last_msg_id = msg_id
+                            self.logger.debug("leader_last_msg_id is now '%s'", leader_last_msg_id)
                         elif stream_name == self.roadblock_uuid + "__stream__followers":
                             followers_last_msg_id = msg_id
+                            self.logger.debug("followers_last_msg_id is now '%s'", followers_last_msg_id)
                         elif stream_name == self.roadblock_uuid + "__stream__" + self.my_id:
                             personal_last_msg_id = msg_id
-
-                        self.logger.debug("received msg=[%s] with msg_id=[%s] from stream '%s'", msg, msg_id, stream_name)
+                            self.logger.debug("personal_last_msg_id is now '%s'", personal_last_msg_id)
 
                         msg = self.message_from_str(msg[b"msg"].decode())
 
