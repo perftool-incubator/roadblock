@@ -154,7 +154,7 @@ def process_options ():
 def sigint_handler(signum, frame):
     '''Handle a SIGINT/CTRL-C'''
 
-    if signum == 2: # SIGINT
+    if signum == signal.SIGINT:
         roadblocker_config.logger.warning("Caught a SIGINT signal")
         roadblocker_config.sigint_counter += 1
 
