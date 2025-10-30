@@ -1828,10 +1828,19 @@ class roadblock:
         leader_last_msg_id = 0
         global_last_msg_id = 0
         personal_last_msg_id = 0
+        followers_prev_last_msg_id = None
+        leader_prev_last_msg_id = None
+        global_prev_last_msg_id = None
+        personal_prev_last_msg_id = None
+        loop_counter = 0
+        empty_loop_counter = 0
+        empty_loop_notification_level = 10
         while self.watch_stream.is_set():
             if self.rc != 0:
                 self.logger.debug("self.rc != 0 --> breaking")
                 break
+
+            loop_counter += 1
 
             msgs = []
             if self.con_pool_active.is_set():
@@ -1841,13 +1850,13 @@ class roadblock:
                             self.roadblock_uuid + "__stream__global": global_last_msg_id,
                             self.roadblock_uuid + "__stream__followers": followers_last_msg_id,
                             self.roadblock_uuid + "__stream__" + self.my_id: personal_last_msg_id
-                        }, block = 0)
+                        }, block = 1)
                     elif self.roadblock_role == "leader":
                         msgs = self.redcon.xread(streams = {
                             self.roadblock_uuid + "__stream__global": global_last_msg_id,
                             self.roadblock_uuid + "__stream__leader": leader_last_msg_id,
                             self.roadblock_uuid + "__stream__" + self.my_id: personal_last_msg_id
-                        }, block = 0)
+                        }, block = 1)
                 except redis.exceptions.ConnectionError as con_error:
                     if self.con_pool_active.is_set():
                         self.logger.error("%s", con_error)
@@ -1860,9 +1869,17 @@ class roadblock:
                     self.logger.error("Stream read failed due to a timeout error!")
 
             if len(msgs) == 0:
-                time.sleep(0.001)
+                empty_loop_counter += 1
+
+                if empty_loop_counter == empty_loop_notification_level:
+                    self.logger.debug("failed to retrieve any messages from any streams for %d loops", empty_loop_notification_level)
+                    empty_loop_counter = 0
             else:
-                self.logger.debug("retrieved messages from %d streams", len(msgs))
+                empty_loop_counter = 0
+
+                self.logger.debug("retrieved messages from %d streams after %d loops since last retrieval", len(msgs), loop_counter)
+
+                loop_counter = 0
 
                 for stream in msgs:
                     stream_name = stream[0].decode()
@@ -1873,30 +1890,75 @@ class roadblock:
                         self.logger.debug("received msg=[%s] with msg_id=[%s] from stream '%s'", msg, msg_id, stream_name)
 
                         if stream_name == self.roadblock_uuid + "__stream__global":
+                            global_prev_last_msg_id = global_last_msg_id
                             global_last_msg_id = msg_id
                             self.logger.debug("global_last_msg_id is now '%s'", global_last_msg_id)
                         elif stream_name == self.roadblock_uuid + "__stream__leader":
+                            leader_prev_last_msg_id = leader_last_msg_id
                             leader_last_msg_id = msg_id
                             self.logger.debug("leader_last_msg_id is now '%s'", leader_last_msg_id)
                         elif stream_name == self.roadblock_uuid + "__stream__followers":
+                            followers_prev_last_msg_id = followers_last_msg_id
                             followers_last_msg_id = msg_id
                             self.logger.debug("followers_last_msg_id is now '%s'", followers_last_msg_id)
                         elif stream_name == self.roadblock_uuid + "__stream__" + self.my_id:
+                            personal_prev_last_msg_id = personal_last_msg_id
                             personal_last_msg_id = msg_id
                             self.logger.debug("personal_last_msg_id is now '%s'", personal_last_msg_id)
 
                         msg = self.message_from_str(msg[b"msg"].decode())
 
-                        if not self.message_for_me(msg):
+                        message_for_me = self.message_for_me(msg)
+                        if message_for_me is None:
+                            self.logger.debug("reverting last message id update due to incomplete message")
+
+                            if stream_name == self.roadblock_uuid + "__stream__global":
+                                global_last_msg_id = global_prev_last_msg_id
+                                self.logger.debug("global_last_msg_id is now '%s'", global_last_msg_id)
+                            elif stream_name == self.roadblock_uuid + "__stream__leader":
+                                leader_last_msg_id = leader_prev_last_msg_id
+                                self.logger.debug("leader_last_msg_id is now '%s'", leader_last_msg_id)
+                            elif stream_name == self.roadblock_uuid + "__stream__followers":
+                                followers_last_msg_id = followers_prev_last_msg_id
+                                self.logger.debug("followers_last_msg_id is now '%s'", followers_last_msg_id)
+                            elif stream_name == self.roadblock_uuid + "__stream__" + self.my_id:
+                                personal_last_msg_id = personal_prev_last_msg_id
+                                self.logger.debug("personal_last_msg_id is now '%s'", personal_last_msg_id)
+
+                            self.logger.debug("stopping processing of messages from stream '%s' for this loop -- the messages need to be retrieved again", stream_name)
+
+                            break
+
+                        if not message_for_me:
                             self.logger.debug("received a message which is not for me!")
                         else:
                             if not self.message_validate(msg):
                                 self.logger.error("received a message for me which did not validate! [%s]", msg)
-                            else:
-                                self.logger.debug("received a validated message for me!")
-                                ret_val = self.message_handle(msg)
-                                if ret_val:
-                                    return ret_val
+
+                                self.logger.debug("reverting last message id update due to message validation failure")
+
+                                if stream_name == self.roadblock_uuid + "__stream__global":
+                                    global_last_msg_id = global_prev_last_msg_id
+                                    self.logger.debug("global_last_msg_id is now '%s'", global_last_msg_id)
+                                elif stream_name == self.roadblock_uuid + "__stream__leader":
+                                    leader_last_msg_id = leader_prev_last_msg_id
+                                    self.logger.debug("leader_last_msg_id is now '%s'", leader_last_msg_id)
+                                elif stream_name == self.roadblock_uuid + "__stream__followers":
+                                    followers_last_msg_id = followers_prev_last_msg_id
+                                    self.logger.debug("followers_last_msg_id is now '%s'", followers_last_msg_id)
+                                elif stream_name == self.roadblock_uuid + "__stream__" + self.my_id:
+                                    personal_last_msg_id = personal_prev_last_msg_id
+                                    self.logger.debug("personal_last_msg_id is now '%s'", personal_last_msg_id)
+
+                                self.logger.debug("stopping processing of messages from stream '%s' for this loop -- the messages need to be retrieved again", stream_name)
+
+                                break
+
+                            self.logger.debug("received a validated message for me!")
+                            ret_val = self.message_handle(msg)
+                            if ret_val:
+                                return ret_val
+
         self.logger.debug("Exited watch stream loop")
 
         if self.rc == 0:
