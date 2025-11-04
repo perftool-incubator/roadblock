@@ -36,7 +36,7 @@ def main():
         redcon = redis.Redis(host = args.redis_server,
                              port = 6379,
                              password = args.redis_password,
-                             health_check_interval = 0)
+                             health_check_interval = 1)
         redcon.ping()
     except redis.exceptions.ConnectionError as con_error:
         print(f"EXCEPTION: {con_error}")

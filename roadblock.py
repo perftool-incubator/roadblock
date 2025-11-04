@@ -1760,7 +1760,7 @@ class roadblock:
                                                      port = 6379,
                                                      db = 0,
                                                      socket_connect_timeout = 5,
-                                                     health_check_interval = 0,
+                                                     health_check_interval = 1,
                                                      connection_class = DebuggingConnection)
                 self.redcon = redis.Redis(connection_pool = self.con_pool)
                 self.redcon.ping()
