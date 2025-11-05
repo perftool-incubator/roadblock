@@ -13,6 +13,7 @@ import threading
 from pathlib import Path
 
 from roadblock import roadblock
+from roadblock import VERBOSE_DEBUG_LEVEL
 import roadblocker_config
 
 
@@ -95,8 +96,8 @@ def process_options ():
     parser.add_argument("--log-level",
                         dest = "log_level",
                         help = "Control how much logging output should be generated",
-                        default = "normal",
-                        choices = [ "normal", "debug" ])
+                        default = "verbose-debug",
+                        choices = [ "normal", "debug", "verbose-debug" ])
 
     parser.add_argument("--message-validation",
                         dest = "message_validation",
@@ -183,11 +184,13 @@ def main():
         logging.basicConfig(level = logging.DEBUG, format = log_debug_format, stream = sys.stdout)
     elif args.log_level == 'normal':
         logging.basicConfig(level = logging.INFO, format = log_normal_format, stream = sys.stdout)
+    elif args.log_level == 'verbose-debug':
+        logging.basicConfig(level = VERBOSE_DEBUG_LEVEL, format = log_debug_format, stream = sys.stdout)
 
     roadblocker_config.logger = logging.getLogger(__file__)
 
     log_debug = False
-    if args.log_level == "debug":
+    if args.log_level in [ "debug",  "verbose-debug" ]:
         log_debug = True
 
     followers = []

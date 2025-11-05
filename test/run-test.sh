@@ -14,7 +14,7 @@ WAIT_FOR_TEST=0
 WAIT_FOR_ABORT_TEST=0
 WAIT_FOR_HEARTBEAT_TIMEOUT_TEST=0
 RANDOMIZE_INITIATOR=1
-ROADBLOCK_DEBUG=" --log-level debug "
+ROADBLOCK_DEBUG=" --log-level verbose-debug "
 ROADBLOCK_IMAGE_NAME=roadblock-client-test
 LEADER_SIGINT_TEST=0
 
@@ -232,7 +232,7 @@ if pushd ${REPO_DIR} > /dev/null; then
 
     # get the roadblock leader container log
     echo -e "\nNormal Output from the roadblock leader:"
-    podman logs roadblock_leader | grep -v "\[CODE\]\|\[   DEBUG\]"
+    podman logs roadblock_leader | grep -v "\[CODE\]\|\[   DEBUG\]\|\[  VDEBUG\]"
     echo -e "\nDebug Output from the roadblock leader:"
     podman logs roadblock_leader
 
@@ -240,7 +240,7 @@ if pushd ${REPO_DIR} > /dev/null; then
     echo -e "\nOutput from the roadblock follower(s):"
     for i in $(seq 1 ${NUM_FOLLOWERS}); do
 	echo -e "\nFollower ${i} Normal Output:"
-	podman logs ${FOLLOWER_PREFIX}_${i} | grep -v "\[CODE\]\|\[   DEBUG\]"
+	podman logs ${FOLLOWER_PREFIX}_${i} | grep -v "\[CODE\]\|\[   DEBUG\]\|\[  VDEBUG\]"
 	echo -e "\nFollower ${i} Debug Output:"
 	podman logs ${FOLLOWER_PREFIX}_${i}
     done

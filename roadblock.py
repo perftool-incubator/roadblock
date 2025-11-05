@@ -18,6 +18,45 @@ import lzma
 import redis
 import jsonschema
 
+VERBOSE_DEBUG_LEVEL = 5
+
+logging.addLevelName(VERBOSE_DEBUG_LEVEL, "VDEBUG")
+
+def verbose_debug(self, message, *args, **kws):
+    '''a new log handler for VERBOSE_DEBUG_LEVEL'''
+    if self.isEnabledFor(VERBOSE_DEBUG_LEVEL):
+        self._log(VERBOSE_DEBUG_LEVEL, message, args, **kws)
+
+logging.Logger.verbose_debug = verbose_debug
+
+debugging_logger = logging.getLogger(__name__)
+
+class DebuggingConnection(redis.Connection):
+    '''a custom connection class which adds important connection information useful for debugging'''
+
+    # this is a wrapper around the original send_command so that we
+    # can add some extra bits
+    def send_command(self, *args, **options):
+        # get the port number and IP address from the socket that will
+        # be used to send the command; since there are often multiple
+        # roadblocks running on the same system the port number is the
+        # most obvious way to connect client side activity to server
+        # side activity
+        socket_info = [ "N/A", "N/A" ]
+        if self._sock:
+            try:
+                # getsockname() returns ('ip', port)
+                socket_info = self._sock.getsockname()
+            except OSError:
+                # for if the socket is closed
+                socket_info = [ "Socket Error", "Socket Error" ]
+
+        debugging_logger.verbose_debug("IP: %s | Port: %s | Command: %s", socket_info[0], socket_info[1], args)
+
+        # call the original send_command to continue normally
+        # this preserves all original logic.
+        return super().send_command(*args, **options)
+
 class roadblock_json_encoder(json.JSONEncoder):
     '''a custom json encoder to handle the custom classes'''
 
@@ -1721,7 +1760,8 @@ class roadblock:
                                                      port = 6379,
                                                      db = 0,
                                                      socket_connect_timeout = 5,
-                                                     health_check_interval = 0)
+                                                     health_check_interval = 1,
+                                                     connection_class = DebuggingConnection)
                 self.redcon = redis.Redis(connection_pool = self.con_pool)
                 self.redcon.ping()
                 self.con_pool_active.set()
