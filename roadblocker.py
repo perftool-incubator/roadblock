@@ -177,21 +177,26 @@ def main():
     args = process_options()
 
     # log formatting variables
-    log_debug_format =  '[CODE][%(module)s %(funcName)s:%(lineno)d]\n[%(asctime)s][%(levelname) 8s][%(threadName)s] %(message)s'
-    log_normal_format = '[%(asctime)s][%(levelname) 8s] %(message)s'
+    debug_format  = logging.Formatter('[CODE][%(module)s %(funcName)s:%(lineno)d]\n[%(asctime)s][%(levelname) 8s][%(threadName)s] %(message)s')
+    normal_format = logging.Formatter('[%(asctime)s][%(levelname) 8s] %(message)s')
 
-    if args.log_level == 'debug':
-        logging.basicConfig(level = logging.DEBUG, format = log_debug_format, stream = sys.stdout)
-    elif args.log_level == 'normal':
-        logging.basicConfig(level = logging.INFO, format = log_normal_format, stream = sys.stdout)
-    elif args.log_level == 'verbose-debug':
-        logging.basicConfig(level = VERBOSE_DEBUG_LEVEL, format = log_debug_format, stream = sys.stdout)
+    logging_handler = logging.StreamHandler(sys.stdout)
+
+    if args.log_level == "debug":
+        logging_handler.setLevel(logging.DEBUG)
+        logging_handler.setFormatter(debug_format)
+    elif args.log_level == "normal":
+        logging_handler.setLevel(logging.INFO)
+        logging_handler.setFormatter(normal_format)
+    elif args.log_level == "verbose-debug":
+        logging_handler.setLevel(VERBOSE_DEBUG_LEVEL)
+        logging_handler.setFormatter(debug_format)
+
+    root_logger = logging.getLogger()
+    root_logger.setLevel(VERBOSE_DEBUG_LEVEL)
+    root_logger.addHandler(logging_handler)
 
     roadblocker_config.logger = logging.getLogger(__file__)
-
-    log_debug = False
-    if args.log_level in [ "debug",  "verbose-debug" ]:
-        log_debug = True
 
     followers = []
     if args.roadblock_followers is not None and len(args.roadblock_followers) > 0:
@@ -205,7 +210,7 @@ def main():
             roadblocker_config.logger.critical("Could not load the roadblock followers file '%s'!", args.roadblock_followers_file)
             return 2
 
-    rb = roadblock(roadblocker_config.logger, log_debug)
+    rb = roadblock()
     rb.set_uuid(args.roadblock_uuid)
     rb.set_role(args.roadblock_role)
     rb.set_follower_id(args.roadblock_follower_id)
