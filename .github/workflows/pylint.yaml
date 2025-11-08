@@ -40,4 +40,4 @@ jobs:
       run: |
         python_files=$(find . -name "*.py")
         echo "Python files: ${python_files}"
-        pylint --disable=too-many-locals --disable=line-too-long --disable=too-many-lines --disable=too-many-return-statements --disable=too-many-branches --disable=too-many-statements --disable=too-many-branches --disable=too-many-nested-blocks --disable=no-else-return --disable=too-many-arguments --disable=unused-argument --disable=invalid-name --disable=too-many-instance-attributes --disable=consider-using-with --disable=too-many-public-methods --disable=too-many-positional-arguments --disable=protected-access ${python_files}
+        ./utilities/run-pylint.sh ${python_files}
