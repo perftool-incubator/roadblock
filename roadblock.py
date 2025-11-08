@@ -14,6 +14,8 @@ import select
 import copy
 import base64
 import lzma
+import queue
+
 import redis
 import jsonschema
 
@@ -303,6 +305,19 @@ class roadblock:
         self.log = None
         self.heartbeat_timeout = 30
         self.waiting_failed = False
+
+        self.message_processing_thread = None
+        self.message_processing_queue = queue.Queue()
+        self.message_processing_force_exit = threading.Event()
+
+        self.followers_last_msg_id = 0
+        self.followers_prev_last_msg_id = None
+        self.leader_last_msg_id = 0
+        self.leader_prev_last_msg_id = None
+        self.global_last_msg_id = 0
+        self.global_prev_last_msg_id = None
+        self.personal_last_msg_id = 0
+        self.personal_prev_last_msg_id = None
 
     def get_rc(self):
         '''get the roadblock return code'''
@@ -1650,6 +1665,88 @@ class roadblock:
 
         return self.RC_SUCCESS
 
+    def last_msg_id_advance(self, stream_name, msg_id):
+        '''advance the last msg id for the specified stream'''
+
+        if stream_name == self.roadblock_uuid + "__stream__global":
+            self.global_prev_last_msg_id = self.global_last_msg_id
+            self.global_last_msg_id = msg_id
+            logger.debug("global_last_msg_id is now '%s'", self.global_last_msg_id)
+        elif stream_name == self.roadblock_uuid + "__stream__leader":
+            self.leader_prev_last_msg_id = self.leader_last_msg_id
+            self.leader_last_msg_id = msg_id
+            logger.debug("leader_last_msg_id is now '%s'", self.leader_last_msg_id)
+        elif stream_name == self.roadblock_uuid + "__stream__followers":
+            self.followers_prev_last_msg_id = self.followers_last_msg_id
+            self.followers_last_msg_id = msg_id
+            logger.debug("followers_last_msg_id is now '%s'", self.followers_last_msg_id)
+        elif stream_name == self.roadblock_uuid + "__stream__" + self.my_id:
+            self.personal_prev_last_msg_id = self.personal_last_msg_id
+            self.personal_last_msg_id = msg_id
+            logger.debug("personal_last_msg_id is now '%s'", self.personal_last_msg_id)
+
+    def last_msg_id_revert(self, stream_name):
+        '''revert the last msg id for the specified stream'''
+
+        if stream_name == self.roadblock_uuid + "__stream__global":
+            self.global_last_msg_id = self.global_prev_last_msg_id
+            self.global_prev_last_msg_id = None
+            logger.debug("global_last_msg_id is now '%s'", self.global_last_msg_id)
+        elif stream_name == self.roadblock_uuid + "__stream__leader":
+            self.leader_last_msg_id = self.leader_prev_last_msg_id
+            self.leader_prev_last_msg_id = None
+            logger.debug("leader_last_msg_id is now '%s'", self.leader_last_msg_id)
+        elif stream_name == self.roadblock_uuid + "__stream__followers":
+            self.followers_last_msg_id = self.followers_prev_last_msg_id
+            self.followers_prev_last_msg_id = None
+            logger.debug("followers_last_msg_id is now '%s'", self.followers_last_msg_id)
+        elif stream_name == self.roadblock_uuid + "__stream__" + self.my_id:
+            self.personal_last_msg_id = self.personal_prev_last_msg_id
+            self.personal_prev_last_msg_id = None
+            logger.debug("personal_last_msg_id is now '%s'", self.personal_last_msg_id)
+
+    def message_processing_handler(self):
+        '''process messages in a dedicated thread so the message retrieval loop can concentrate on that'''
+
+        logger.debug("starting message processing thread")
+
+        while True:
+            if not self.watch_stream.is_set():
+                if self.message_processing_force_exit.is_set():
+                    logger.debug("exiting message processing loop without draining the queue")
+                    break
+
+                if self.message_processing_queue.empty():
+                    logger.debug("exiting message processing loop")
+                    break
+
+                logger.debug("signal received to exit message processing loop but messages to process remain in the queue")
+
+            msg = None
+            try:
+                msg = self.message_processing_queue.get(timeout = 0.001) # 1 millisecond
+            except queue.Empty:
+                # the following line can generate massive amounts of
+                # output so it is commented out by default
+                #logger.verbose_debug("received a message processing queue empty exception")
+                continue
+
+            if msg is None:
+                logger.debug("received a null message")
+                continue
+
+            logger.debug("retrieved message from the message processing queue")
+
+            ret_val = self.message_handle(msg)
+            if ret_val != 0:
+                logger.error("message generated return code %d", ret_val)
+                self.watch_stream.clear()
+
+            logger.debug("notifying message processing queue that message processing has completed")
+            self.message_processing_queue.task_done()
+
+        logger.debug("stopping message processing thread")
+
     def run_it(self):
         '''execute the roadblock'''
 
@@ -1844,20 +1941,26 @@ class roadblock:
             logger.info("Sending 'leader-online' message to the followers")
             self.stream_add("followers", self.message_build("all", "all", "leader-online"))
 
-        followers_last_msg_id = 0
-        leader_last_msg_id = 0
-        global_last_msg_id = 0
-        personal_last_msg_id = 0
-        followers_prev_last_msg_id = None
-        leader_prev_last_msg_id = None
-        global_prev_last_msg_id = None
-        personal_prev_last_msg_id = None
+        self.message_processing_thread = threading.Thread(target = self.message_processing_handler, args = (), name = "message_processing_handler")
+        self.message_processing_thread.start()
+
         loop_counter = 0
         empty_loop_counter = 0
         empty_loop_notification_level = 10
         while self.watch_stream.is_set():
             if self.rc != 0:
-                logger.debug("self.rc != 0 --> breaking")
+                logger.debug("self.rc != 0 --> exiting stream watching loop")
+
+                # tell myself and the message processing handler that
+                # we can quit
+                logger.debug("disabling stream watching")
+                self.watch_stream.clear()
+
+                # tell the message processing thread to force exit
+                # without processing any remaining messages in the
+                # queue
+                self.message_processing_force_exit.set()
+
                 break
 
             loop_counter += 1
@@ -1867,15 +1970,15 @@ class roadblock:
                 try:
                     if self.roadblock_role == "follower":
                         msgs = self.redcon.xread(streams = {
-                            self.roadblock_uuid + "__stream__global": global_last_msg_id,
-                            self.roadblock_uuid + "__stream__followers": followers_last_msg_id,
-                            self.roadblock_uuid + "__stream__" + self.my_id: personal_last_msg_id
+                            self.roadblock_uuid + "__stream__global": self.global_last_msg_id,
+                            self.roadblock_uuid + "__stream__followers": self.followers_last_msg_id,
+                            self.roadblock_uuid + "__stream__" + self.my_id: self.personal_last_msg_id
                         }, block = 1)
                     elif self.roadblock_role == "leader":
                         msgs = self.redcon.xread(streams = {
-                            self.roadblock_uuid + "__stream__global": global_last_msg_id,
-                            self.roadblock_uuid + "__stream__leader": leader_last_msg_id,
-                            self.roadblock_uuid + "__stream__" + self.my_id: personal_last_msg_id
+                            self.roadblock_uuid + "__stream__global": self.global_last_msg_id,
+                            self.roadblock_uuid + "__stream__leader": self.leader_last_msg_id,
+                            self.roadblock_uuid + "__stream__" + self.my_id: self.personal_last_msg_id
                         }, block = 1)
                 except redis.exceptions.ConnectionError as con_error:
                     if self.con_pool_active.is_set():
@@ -1909,22 +2012,7 @@ class roadblock:
                     for msg_id, msg in stream[1]:
                         logger.debug("received msg=[%s] with msg_id=[%s] from stream '%s'", msg, msg_id, stream_name)
 
-                        if stream_name == self.roadblock_uuid + "__stream__global":
-                            global_prev_last_msg_id = global_last_msg_id
-                            global_last_msg_id = msg_id
-                            logger.debug("global_last_msg_id is now '%s'", global_last_msg_id)
-                        elif stream_name == self.roadblock_uuid + "__stream__leader":
-                            leader_prev_last_msg_id = leader_last_msg_id
-                            leader_last_msg_id = msg_id
-                            logger.debug("leader_last_msg_id is now '%s'", leader_last_msg_id)
-                        elif stream_name == self.roadblock_uuid + "__stream__followers":
-                            followers_prev_last_msg_id = followers_last_msg_id
-                            followers_last_msg_id = msg_id
-                            logger.debug("followers_last_msg_id is now '%s'", followers_last_msg_id)
-                        elif stream_name == self.roadblock_uuid + "__stream__" + self.my_id:
-                            personal_prev_last_msg_id = personal_last_msg_id
-                            personal_last_msg_id = msg_id
-                            logger.debug("personal_last_msg_id is now '%s'", personal_last_msg_id)
+                        self.last_msg_id_advance(stream_name, msg_id)
 
                         msg = self.message_from_str(msg[b"msg"].decode())
 
@@ -1932,18 +2020,7 @@ class roadblock:
                         if message_for_me is None:
                             logger.debug("reverting last message id update due to incomplete message")
 
-                            if stream_name == self.roadblock_uuid + "__stream__global":
-                                global_last_msg_id = global_prev_last_msg_id
-                                logger.debug("global_last_msg_id is now '%s'", global_last_msg_id)
-                            elif stream_name == self.roadblock_uuid + "__stream__leader":
-                                leader_last_msg_id = leader_prev_last_msg_id
-                                logger.debug("leader_last_msg_id is now '%s'", leader_last_msg_id)
-                            elif stream_name == self.roadblock_uuid + "__stream__followers":
-                                followers_last_msg_id = followers_prev_last_msg_id
-                                logger.debug("followers_last_msg_id is now '%s'", followers_last_msg_id)
-                            elif stream_name == self.roadblock_uuid + "__stream__" + self.my_id:
-                                personal_last_msg_id = personal_prev_last_msg_id
-                                logger.debug("personal_last_msg_id is now '%s'", personal_last_msg_id)
+                            self.last_msg_id_revert(stream_name)
 
                             logger.debug("stopping processing of messages from stream '%s' for this loop -- the messages need to be retrieved again", stream_name)
 
@@ -1957,29 +2034,22 @@ class roadblock:
 
                                 logger.debug("reverting last message id update due to message validation failure")
 
-                                if stream_name == self.roadblock_uuid + "__stream__global":
-                                    global_last_msg_id = global_prev_last_msg_id
-                                    logger.debug("global_last_msg_id is now '%s'", global_last_msg_id)
-                                elif stream_name == self.roadblock_uuid + "__stream__leader":
-                                    leader_last_msg_id = leader_prev_last_msg_id
-                                    logger.debug("leader_last_msg_id is now '%s'", leader_last_msg_id)
-                                elif stream_name == self.roadblock_uuid + "__stream__followers":
-                                    followers_last_msg_id = followers_prev_last_msg_id
-                                    logger.debug("followers_last_msg_id is now '%s'", followers_last_msg_id)
-                                elif stream_name == self.roadblock_uuid + "__stream__" + self.my_id:
-                                    personal_last_msg_id = personal_prev_last_msg_id
-                                    logger.debug("personal_last_msg_id is now '%s'", personal_last_msg_id)
+                                self.last_msg_id_revert(stream_name)
 
                                 logger.debug("stopping processing of messages from stream '%s' for this loop -- the messages need to be retrieved again", stream_name)
 
                                 break
 
                             logger.debug("received a validated message for me!")
-                            ret_val = self.message_handle(msg)
-                            if ret_val:
-                                return ret_val
+
+                            logger.debug("adding message to the message processing queue")
+                            self.message_processing_queue.put(msg)
 
         logger.debug("Exited watch stream loop")
+
+        logger.debug("joining message processing thread")
+        self.message_processing_thread.join()
+        logger.debug("message processing thread joined")
 
         if self.rc == 0:
             self.cleanup()
