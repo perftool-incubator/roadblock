@@ -6,7 +6,7 @@ on:
     branches: [ master ]
     paths:
     - .github/workflows/crucible-merged.yaml
-    - .github/workshop.json
+    - workshop.json
   workflow_dispatch:
 
 jobs:
