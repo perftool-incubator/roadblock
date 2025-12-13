@@ -96,7 +96,7 @@ def process_options ():
     parser.add_argument("--log-level",
                         dest = "log_level",
                         help = "Control how much logging output should be generated",
-                        default = "verbose-debug",
+                        default = "normal",
                         choices = [ "normal", "debug", "verbose-debug" ])
 
     parser.add_argument("--message-validation",
