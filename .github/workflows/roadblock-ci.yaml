@@ -3,16 +3,6 @@ name: roadblock-ci
 on:
   pull_request:
     branches: [ master ]
-    paths-ignore:
-    - LICENSE
-    - '**.md'
-    - '.github/rulesets/**'
-    - .github/workflows/run-crucible-tracking.yaml
-    - .github/workflows/crucible-merged.yaml
-    - .github/workflows/faux-crucible-ci.yaml
-    - .github/workflows/faux-roadblock-ci.yaml
-    - .github/workflows/faux-pylint.yaml
-    - 'docs/**'
   workflow_dispatch:
 
 concurrency:
@@ -20,8 +10,31 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      only-docs: ${{ steps.filter.outputs.only_changed }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: filter
+        uses: tj-actions/changed-files@v47
+        with:
+          files: |
+            LICENSE
+            *.md
+            **/*.md
+            .github/rulesets/**
+            .github/workflows/run-crucible-tracking.yaml
+            .github/workflows/crucible-merged.yaml
+            .github/workflows/crucible-ci.yaml
+            .github/workflows/roadblock-ci.yaml
+            .github/workflows/pylint.yaml
+            docs/**
+
   roadblock-ci-tests:
     runs-on: ubuntu-latest
+    needs: changes
+    if: ${{ github.event_name == 'workflow_dispatch' || needs.changes.outputs.only-docs != 'true' }}
 
     strategy:
       fail-fast: false
@@ -68,12 +81,21 @@ jobs:
       run: |
         sudo ./test/run-test.sh ${{ matrix.tests.args }}
 
-  roadblock-ci-complete:
-    runs-on: [ self-hosted, workflow-overhead ]
-
-    needs:
-    - roadblock-ci-tests
-
+  faux-roadblock-ci:
+    runs-on: ubuntu-latest
+    needs: changes
+    if: ${{ github.event_name != 'workflow_dispatch' && needs.changes.outputs.only-docs == 'true' }}
     steps:
-    - name: Confirm Success
-      run: echo "roadblock-ci-complete"
+      - run: echo "faux-roadblock-ci-complete"
+
+  roadblock-ci-complete:
+    runs-on: ubuntu-latest
+    needs: [ roadblock-ci-tests, faux-roadblock-ci ]
+    if: always()
+    steps:
+      - name: Check Results
+        if: >-
+          contains(needs.*.result, 'failure') ||
+          contains(needs.*.result, 'cancelled')
+        run: exit 1
+      - run: echo "roadblock-ci-complete"
