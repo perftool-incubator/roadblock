@@ -12,6 +12,14 @@
 		"hiredis",
 		"python-jsonschema"
 	    ]
+	},
+	{
+	    "name": "crucible-controller",
+	    "requirements": [
+		"python-redis",
+		"hiredis",
+		"python-jsonschema"
+	    ]
 	}
     ],
     "requirements": [
