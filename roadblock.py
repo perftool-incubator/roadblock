@@ -628,18 +628,23 @@ class roadblock:
         '''Define the schema used to validate user messages'''
 
         self.user_schema = {
+            "description": "Schema for user-defined messages sent between roadblock participants.  Each message targets a recipient and carries either a string or object payload.",
             "type": "array",
             "minItems": 1,
             "uniqueItems": True,
             "items": {
+                "description": "A user message with a recipient and payload.  The payload is either a string or a JSON object.",
                 "oneOf": [
                     {
+                        "description": "A user message carrying a string payload.",
                         "type": "object",
                         "properties": {
                             "recipient": {
+                                "description": "The target recipient for this message.",
                                 "$ref": "#/definitions/recipient"
                             },
                             "user-string": {
+                                "description": "The string payload to deliver to the recipient.",
                                 "type": "string",
                                 "minLength": 1
                             }
@@ -651,12 +656,15 @@ class roadblock:
                         "additionalProperties": False
                     },
                     {
+                        "description": "A user message carrying a JSON object payload.",
                         "type": "object",
                         "properties": {
                             "recipient": {
+                                "description": "The target recipient for this message.",
                                 "$ref": "#/definitions/recipient"
                             },
                             "user-object": {
+                                "description": "The JSON object payload to deliver to the recipient.",
                                 "type": "object"
                             }
                         },
@@ -670,12 +678,15 @@ class roadblock:
             },
             "definitions": {
                 "recipient": {
+                    "description": "Identifies the target recipient of a user message by type and ID.",
                     "type": "object",
                     "properties": {
                         "timestamp": {
+                            "description": "An optional timestamp for when the message was created.",
                             "type": "integer"
                         },
                         "type": {
+                            "description": "The type of participant to target.  'leader' targets the barrier leader, 'follower' targets a specific follower, and 'all' broadcasts to all participants.",
                             "type": "string",
                             "enum": [
                                 "leader",
@@ -684,6 +695,7 @@ class roadblock:
                             ]
                         },
                         "id": {
+                            "description": "The identifier of the target participant.  For 'leader' or 'follower' types, this is the participant's registered ID.  For 'all', this should be 'all'.",
                             "type": "string",
                             "minLength": 1
                         }
@@ -703,29 +715,36 @@ class roadblock:
         '''Define the schema used to validate roadblock protocol messages'''
 
         self.schema = {
+            "description": "Schema for roadblock protocol messages exchanged between leaders and followers during barrier synchronization.  Each message contains a payload with sender/recipient identification and a command, plus integrity checksums.",
             "type": "object",
             "properties": {
                 "payload": {
+                    "description": "The message payload containing the sender, recipient, roadblock identity, and the protocol command.",
                     "type": "object",
                     "properties": {
                         "uuid": {
+                            "description": "A unique identifier for this specific message instance.",
                             "type": "string",
                             "minLength": 36,
                             "maxLength": 36
                         },
                         "roadblock": {
+                            "description": "The UUID of the roadblock barrier this message belongs to.  Must match the current barrier's UUID.",
                             "type": "string",
                             "enum": [
                                 self.roadblock_uuid
                             ]
                         },
                         "sender": {
+                            "description": "Identifies the participant that sent this message.",
                             "type": "object",
                             "properties": {
                                 "timestamp": {
+                                    "description": "The epoch timestamp when this message was sent.",
                                     "type": "integer"
                                 },
                                 "type": {
+                                    "description": "The role of the sender in the barrier.",
                                     "type": "string",
                                     "enum": [
                                         "leader",
@@ -733,6 +752,7 @@ class roadblock:
                                     ]
                                 },
                                 "id": {
+                                    "description": "The registered identifier of the sender.",
                                     "type": "string",
                                     "minLength": 1
                                 }
@@ -745,12 +765,15 @@ class roadblock:
                             "additionalProperties": False
                         },
                         "recipient": {
+                            "description": "Identifies the target recipient of this message.",
                             "type": "object",
                             "properties": {
                                 "timestamp": {
+                                    "description": "An optional timestamp associated with the recipient.",
                                     "type": "integer"
                                 },
                                 "type": {
+                                    "description": "The type of participant to target.  'leader' targets the barrier leader, 'follower' targets a specific follower, and 'all' broadcasts to all participants.",
                                     "type": "string",
                                     "enum": [
                                         "leader",
@@ -759,6 +782,7 @@ class roadblock:
                                     ]
                                 },
                                 "id": {
+                                    "description": "The identifier of the target participant.  Required when type is 'leader' or 'follower'.",
                                     "type": "string",
                                     "minLength": 1
                                 }
@@ -784,9 +808,11 @@ class roadblock:
                             }
                         },
                         "message": {
+                            "description": "The protocol message content, consisting of a command and optional associated data.",
                             "type": "object",
                             "properties": {
                                 "command": {
+                                    "description": "The roadblock protocol command.  Controls barrier lifecycle transitions such as stream creation, participant readiness, heartbeats, and go/abort/wait signals.",
                                     "type": "string",
                                     "enum": [
                                         "global-stream-created",
@@ -818,14 +844,18 @@ class roadblock:
                                     ]
                                 },
                                 "value": {
+                                    "description": "A string value associated with certain commands (e.g., the timeout timestamp for the 'timeout-ts' command).",
                                     "type": "string",
                                     "minLength": 1
                                 },
                                 "user-string": {
+                                    "description": "A user-defined string payload, present when the command is 'user-string'.",
                                     "type": "string",
                                     "minLength": 1
                                 },
-                                "user-object": {}
+                                "user-object": {
+                                    "description": "A user-defined JSON object payload, present when the command is 'user-object'."
+                                }
                             },
                             "required": [
                                 "command"
@@ -893,11 +923,13 @@ class roadblock:
                     "additionalProperties": False
                 },
                 "tx_checksum": {
+                    "description": "A SHA-256 checksum of the serialized payload computed by the sender, used to verify message integrity.",
                     "type": "string",
                     "minLength": 64,
                     "maxLength": 64
                 },
                 "rx_checksum": {
+                    "description": "A SHA-256 checksum of the serialized payload computed by the receiver, used to confirm the message was received without corruption.",
                     "type": "string",
                     "minLength": 64,
                     "maxLength": 64
