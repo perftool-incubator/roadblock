@@ -571,8 +571,6 @@ class roadblock:
             incomplete_message = True
         elif not "id" in message["payload"]["sender"]:
             incomplete_message = True
-        elif not "recipient" in message["payload"]:
-            incomplete_message = True
         elif not "type" in message["payload"]["recipient"]:
             incomplete_message = True
 
