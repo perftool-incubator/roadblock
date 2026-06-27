@@ -1237,9 +1237,11 @@ class roadblock:
             except redis.exceptions.ConnectionError as con_error:
                 logger.error("%s", con_error)
                 logger.error("Stream add to '%s' failed due to connection error!", stream_name)
+                ret_val = None
             except redis.exceptions.TimeoutError as con_error:
                 logger.error("%s", con_error)
                 logger.error("Stream add to '%s' failed due to a timeout error!", stream_name)
+                ret_val = None
 
             if ret_val is None:
                 logger.warning("Failed attempt %d to add message '%s' to stream '%s'", counter, message, stream_name)
