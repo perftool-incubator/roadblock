@@ -549,7 +549,7 @@ class roadblock:
                 jsonschema.validate(instance=message, schema=self.schema)
                 logger.debug("message passed schema validation [%s]", self.message_to_str(message))
 
-            except jsonschema.exceptions.SchemaError:
+            except jsonschema.exceptions.ValidationError:
                 logger.error("message failed schema validation [%s]", self.message_to_str(message))
                 return False
 
@@ -1835,7 +1835,7 @@ class roadblock:
 
             try:
                 jsonschema.validate(instance=self.user_messages, schema=self.user_schema)
-            except jsonschema.exceptions.SchemaError as exception:
+            except jsonschema.exceptions.ValidationError as exception:
                 logger.critical(exception)
                 logger.critical("Could not JSON validate the user messages!")
                 return self.RC_INVALID_INPUT
