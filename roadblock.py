@@ -549,7 +549,7 @@ class roadblock:
                 jsonschema.validate(instance=message, schema=self.schema)
                 logger.debug("message passed schema validation [%s]", self.message_to_str(message))
 
-            except jsonschema.exceptions.SchemaError:
+            except jsonschema.exceptions.ValidationError:
                 logger.error("message failed schema validation [%s]", self.message_to_str(message))
                 return False
 
@@ -570,8 +570,6 @@ class roadblock:
         elif not "sender" in message["payload"]:
             incomplete_message = True
         elif not "id" in message["payload"]["sender"]:
-            incomplete_message = True
-        elif not "recipient" in message["payload"]:
             incomplete_message = True
         elif not "type" in message["payload"]["recipient"]:
             incomplete_message = True
@@ -1237,9 +1235,11 @@ class roadblock:
             except redis.exceptions.ConnectionError as con_error:
                 logger.error("%s", con_error)
                 logger.error("Stream add to '%s' failed due to connection error!", stream_name)
+                ret_val = None
             except redis.exceptions.TimeoutError as con_error:
                 logger.error("%s", con_error)
                 logger.error("Stream add to '%s' failed due to a timeout error!", stream_name)
+                ret_val = None
 
             if ret_val is None:
                 logger.warning("Failed attempt %d to add message '%s' to stream '%s'", counter, message, stream_name)
@@ -1835,7 +1835,7 @@ class roadblock:
 
             try:
                 jsonschema.validate(instance=self.user_messages, schema=self.user_schema)
-            except jsonschema.exceptions.SchemaError as exception:
+            except jsonschema.exceptions.ValidationError as exception:
                 logger.critical(exception)
                 logger.critical("Could not JSON validate the user messages!")
                 return self.RC_INVALID_INPUT
