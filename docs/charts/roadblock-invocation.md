@@ -6,6 +6,12 @@ in parallel. Redis Streams carry the messages; the leader consumes its leader
 and personal streams, while each follower consumes the global, followers, and
 personal streams.
 
+For a less crowded view, see the focused paths:
+
+- [Normal path](roadblock-invocation-normal.md)
+- [Abort path](roadblock-invocation-abort.md)
+- [Wait-for path](roadblock-invocation-wait-for.md)
+
 ```mermaid
 %%{init: {"flowchart": {"useMaxWidth": true, "htmlLabels": true}}}%%
 flowchart LR
