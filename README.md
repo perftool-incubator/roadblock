@@ -38,3 +38,8 @@ The test harness supports 9 scenarios including basic synchronization, timeout h
 ### Protocol
 
 ![Roadblock protocol flow chart](docs/charts/roadblock-protocol.svg)
+
+The protocol is also documented as Mermaid charts:
+
+- [Roadblock state machine](docs/charts/roadblock-state-machine.md)
+- [Typical leader/follower invocation](docs/charts/roadblock-invocation.md)
