@@ -10,11 +10,11 @@ flowchart TD
     START([Invocation starts]) --> INIT
 
     subgraph Setup[Initialization]
-        INIT[Connect to Redis and configure timeout]
+        INIT[Connect to Redis<br/>and configure timeout]
         INIT --> CLAIM{Roadblock key exists?}
         CLAIM -- No --> CREATE[Initiator creates Redis keys<br/>and streams<br/>publishes timeout<br/>and initiator info]
-        CLAIM -- Yes --> WAIT_INIT[Wait for initialized flag]
-        CREATE --> STREAMS[Create personal stream]
+        CLAIM -- Yes --> WAIT_INIT[Wait for<br/>initialized flag]
+        CREATE --> STREAMS[Create personal<br/>stream]
         WAIT_INIT --> STREAMS
     end
 
@@ -22,7 +22,7 @@ flowchart TD
     ONLINE[Online<br/>Follower: follower-online<br/>Leader: leader-online]
     ONLINE --> ALL_ONLINE{Leader received<br/>follower-online<br/>from all N?}
     ALL_ONLINE -- No --> ONLINE
-    ALL_ONLINE -- Yes --> BROADCAST_ONLINE[Leader broadcasts all-online]
+    ALL_ONLINE -- Yes --> BROADCAST_ONLINE[Leader broadcasts<br/>all-online]
     BROADCAST_ONLINE --> READY
 
     READY[Ready<br/>follower-ready<br/>follower-ready-abort<br/>follower-ready-waiting]
@@ -34,7 +34,7 @@ flowchart TD
     DECIDE -- No --> GO_BROADCAST[Leader broadcasts all-go]
     DECIDE -- Wait-for --> WAIT_BROADCAST[Leader broadcasts all-wait<br/>starts heartbeat<br/>timeout]
 
-    WAIT_BROADCAST --> HEARTBEAT[Heartbeat monitoring]
+    WAIT_BROADCAST --> HEARTBEAT[Heartbeat<br/>monitoring]
     HEARTBEAT --> HB_ROUND[Leader sends<br/>leader-heartbeat<br/>Followers reply<br/>follower-heartbeat]
     HB_ROUND --> WAIT_COMPLETE{All wait-for commands<br/>completed?}
     WAIT_COMPLETE -- No --> HB_ROUND
@@ -43,7 +43,7 @@ flowchart TD
 
     GO_BROADCAST --> GONE
     ABORT_BROADCAST --> GONE
-    GONE[Follower sends follower-gone]
+    GONE[Follower<br/>sends<br/>follower-gone]
     GONE --> ALL_GONE{Leader received<br/>follower-gone from all N?}
     ALL_GONE -- No --> GONE
     ALL_GONE -- Yes --> CLEANUP[Leader broadcasts all-gone<br/>cleans Redis keys<br/>and streams]
