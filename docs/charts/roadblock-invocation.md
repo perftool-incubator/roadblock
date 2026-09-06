@@ -7,26 +7,27 @@ and personal streams, while each follower consumes the global, followers, and
 personal streams.
 
 ```mermaid
+%%{init: {"flowchart": {"useMaxWidth": true, "htmlLabels": true}}}%%
 flowchart LR
     subgraph Leader[Leader invocation]
-        L0[Start roadblocker.py<br/>--role leader<br/>--followers F1 ... FN]
-        L1[Connect to Redis]
-        L2{Create roadblock key?}
-        L3[Create global, leader,<br/>and followers streams<br/>publish timeout-ts]
-        L4[Create leader personal stream]
-        L5[Send leader-online<br/>to followers stream]
-        L6[Wait for follower-online<br/>from F1 ... FN]
-        L7[Send all-online]
-        L8[Track follower-ready<br/>from F1 ... FN]
-        L9[Send all-ready]
-        L10{Decision from followers}
-        L11[Send all-go]
-        L12[Send all-abort]
-        L13[Send all-wait<br/>then leader-heartbeat]
-        L14[Track follower-heartbeat<br/>and waiting-complete]
-        L15[Send all-go]
-        L16[Track follower-gone<br/>from F1 ... FN]
-        L17[Send all-gone<br/>delete keys and streams]
+        L0[Start roadblocker.py<br/><strong>--role leader</strong><br/><strong>--followers F1 ... FN</strong>]
+        L1[Connect<br/>to Redis]
+        L2{Create<br/>roadblock key?}
+        L3[Create global, leader,<br/>and followers streams<br/>publish <strong>timeout-ts</strong>]
+        L4[Create leader<br/>personal stream]
+        L5[Send <strong>leader-online</strong><br/>to followers stream]
+        L6[Wait for <strong>follower-online</strong><br/>from F1 ... FN]
+        L7[Send <strong>all-online</strong>]
+        L8[Track <strong>follower-ready</strong><br/>from F1 ... FN]
+        L9[Send <strong>all-ready</strong>]
+        L10{Decision<br/>from followers}
+        L11[Send <strong>all-go</strong>]
+        L12[Send <strong>all-abort</strong>]
+        L13[Send <strong>all-wait</strong><br/>then <strong>leader-heartbeat</strong>]
+        L14[Track <strong>follower-heartbeat</strong><br/>and <strong>follower-waiting-complete</strong>]
+        L15[Send <strong>all-go</strong>]
+        L16[Track <strong>follower-gone</strong><br/>from F1 ... FN]
+        L17[Send <strong>all-gone</strong><br/>delete keys<br/>and streams]
         L18([Return success])
         L0 --> L1 --> L2
         L2 -- no --> L3 --> L4
@@ -49,25 +50,25 @@ flowchart LR
     end
 
     subgraph Follower[One follower: F1]
-        F0[Start roadblocker.py<br/>--role follower<br/>--follower-id F1]
-        F1[Connect to Redis]
-        F2[See existing key or wait<br/>for initialized flag]
-        F3[Create F1 personal stream]
-        F4[Send follower-online<br/>to leader stream]
-        F5[Receive all-online]
-        F6[Send follower-ready<br/>or follower-ready-abort<br/>or follower-ready-waiting]
-        F7{Leader decision}
-        F8[Receive all-go]
-        F9[Receive all-abort<br/>kill wait-for if active]
-        F10[Receive all-wait]
-        F11[Reply follower-heartbeat<br/>until wait-for completes]
-        F12[Send follower-waiting-complete<br/>or ...-failed]
-        F13[Send follower-gone<br/>stop watching streams]
+        F0[Start roadblocker.py<br/><strong>--role follower</strong><br/><strong>--follower-id F1</strong>]
+        F1[Connect<br/>to Redis]
+        F2[See existing key<br/>or wait for<br/>initialized flag]
+        F3[Create F1<br/>personal stream]
+        F4[Send <strong>follower-online</strong><br/>to leader stream]
+        F5[Receive <strong>all-online</strong>]
+        F6[Send <strong>follower-ready</strong><br/>or <strong>follower-ready-abort</strong><br/>or <strong>follower-ready-waiting</strong>]
+        F7{Leader<br/>decision}
+        F8[Receive <strong>all-go</strong>]
+        F9[Receive <strong>all-abort</strong><br/>kill wait-for<br/>if active]
+        F10[Receive <strong>all-wait</strong>]
+        F11[Reply <strong>follower-heartbeat</strong><br/>until wait-for completes]
+        F12[Send <strong>follower-waiting-complete</strong><br/>or <strong>...-failed</strong>]
+        F13[Send <strong>follower-gone</strong><br/>stop watching<br/>streams]
         F14([Return success or abort])
         F0 --> F1 --> F2 --> F3 --> F4 --> F5 --> F6 --> F7
-        F7 -- all-go --> F8 --> F13
-        F7 -- all-abort --> F9 --> F13
-        F7 -- all-wait --> F10 --> F11 --> F12
+        F7 -- "<strong>all-go</strong>" --> F8 --> F13
+        F7 -- "<strong>all-abort</strong>" --> F9 --> F13
+        F7 -- "<strong>all-wait</strong>" --> F10 --> F11 --> F12
         F12 --> F13
         F13 --> F14
     end
@@ -102,10 +103,12 @@ flowchart LR
 
     classDef leader fill:#e8f1fb,stroke:#356a9a,color:#111;
     classDef follower fill:#f4eafb,stroke:#7a4b9a,color:#111;
+    classDef state fill:#dbeafe,stroke:#2563eb,stroke-width:3px,color:#111;
     classDef store fill:#fff4cc,stroke:#a87900,color:#111;
     classDef terminal fill:#e2f3e5,stroke:#38734a,color:#111;
     class L0,L1,L2,L3,L4,L5,L6,L7,L8,L9,L10,L11,L12,L13,L14,L15,L16,L17 leader;
     class F0,F1,F2,F3,F4,F5,F6,F7,F8,F9,F10,F11,F12,F13 follower;
+    class L2,L10,F7 state;
     class R0,R1,R2,R3,R4 store;
     class L18,F14 terminal;
 ```
