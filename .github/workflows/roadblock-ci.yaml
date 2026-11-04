@@ -15,7 +15,7 @@ jobs:
     outputs:
       only-docs: ${{ steps.filter.outputs.only_modified }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - id: filter
         uses: tj-actions/changed-files@v47
         with:
@@ -69,7 +69,7 @@ jobs:
         echo "name=\"${{ matrix.tests.name }}\""
         echo "args=\"${{ matrix.tests.args }}\""
 
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
 
     - name: Install test dependencies
       run: |

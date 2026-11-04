@@ -15,7 +15,7 @@ jobs:
     outputs:
       only-docs: ${{ steps.filter.outputs.only_modified }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - id: filter
         uses: tj-actions/changed-files@v47
         with:
@@ -40,9 +40,9 @@ jobs:
     needs: changes
     if: ${{ github.event.pull_request.head.repo.fork != true && (github.event_name == 'workflow_dispatch' || needs.changes.outputs.only-docs != 'true') }}
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
     - name: Set up Python 3.9
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v7
       with:
         python-version: 3.9
     - name: Install dependencies
